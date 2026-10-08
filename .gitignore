@@ -1,0 +1,9 @@
+# Real credentials never go into version control
+config/config.local.php
+
+# Local tooling noise
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

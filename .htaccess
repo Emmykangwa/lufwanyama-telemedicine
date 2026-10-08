@@ -1,0 +1,38 @@
+# Apache rules for the project root. Ignored by the PHP built-in server,
+# which does not serve .sql, .md or dot-files anyway when you use router.php.
+
+Options -Indexes
+
+# Never serve the schema, the docs, the installer or editor leftovers.
+<FilesMatch "\.(sql|md|log|ini|sample\.php)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(\.|composer\.|package\.)">
+    Require all denied
+</FilesMatch>
+
+# tools/install.php is command-line only, but block it from the web as well.
+<FilesMatch "^install\.php$">
+    Require all denied
+</FilesMatch>
+
+# Defence in depth: the same headers PHP sends in includes/init.php.
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "same-origin"
+</IfModule>
+
+# Small, text-heavy pages compress very well, which matters on 2G.
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript application/json
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+</IfModule>
+
+DirectoryIndex index.php

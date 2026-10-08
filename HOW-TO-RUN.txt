@@ -1,0 +1,128 @@
+============================================================
+ LUFWANYAMA DISTRICT TELEMEDICINE SYSTEM — HOW TO RUN
+============================================================
+
+QUICK START (recommended)
+--------------------------
+1. Double-click  start.bat  in this folder.
+   That's it. The script will:
+     • Start MariaDB (the database server) if it is not already running
+     • Start the PHP web server on http://localhost:8000
+     • Open your browser to the login page automatically
+
+2. When you are done, double-click  stop.bat  to shut everything down cleanly.
+
+
+WHAT IS ALREADY SET UP
+-----------------------
+• MariaDB 11.4.4 is installed at  C:\mariadb
+• The database "telemedicine" is created with all six tables
+• No demo patients or appointments: the records start empty
+• One login for each role already exists (see below)
+• PHP has pdo_mysql enabled (edited in C:\php\php.ini)
+
+
+LOGIN CREDENTIALS  (one account per role)
+------------------------------------------
+  Role              Phone number   Password
+  ─────────────────────────────────────────────────────
+  Administrator     0970000001     Admin@2026
+  Health worker     0970000002     Health@2026
+  Doctor            0970000003     Doctor@2026
+  Patient           0970000004     Patient@2026
+
+  The health worker and doctor both work at
+  "Lufwanyama Rural Health Centre", and the patient is on that
+  centre's register, so you can run the whole flow right away:
+  health worker creates a request -> doctor responds ->
+  patient sees the status.
+
+  Change these passwords before real use
+  (Staff accounts -> Reset a password).
+
+  To recreate these accounts at any time:
+      php tools/demo_accounts.php
+
+
+MANUAL START (if start.bat does not work)
+-----------------------------------------
+Open a Command Prompt (cmd.exe) and run these two commands:
+
+  Step 1 — start the database:
+    "C:\mariadb\bin\mysqld.exe" --defaults-file="C:\mariadb\my.ini" --standalone
+
+  Step 2 — open a second Command Prompt and start the web server:
+    cd "C:\emmy project"
+    php -S localhost:8000 router.php
+
+  Step 3 — open your browser to:
+    http://localhost:8000
+
+
+STOPPING THE SERVER
+--------------------
+• Double-click stop.bat, OR
+• Press Ctrl+C in the PHP server window, then run:
+    "C:\mariadb\bin\mysqladmin.exe" -u root shutdown
+
+
+TROUBLESHOOTING
+---------------
+"Database connection failed"
+  → MariaDB is not running. Double-click start.bat again, or start it manually
+    with the command in MANUAL START above.
+
+"could not find driver"
+  → pdo_mysql is not enabled. Open C:\php\php.ini, search for "pdo_mysql",
+    remove the semicolon at the start of the line, save, and restart the server.
+
+Blank white page
+  → Open config\config.local.php and set:
+      $APP_ENV = 'development';
+    Then reload to see the real error message.
+
+"Invalid or expired request" after submitting
+  → Your session timed out. Reload the page and submit again.
+
+Login always fails
+  → Make sure there are no spaces in the phone number.
+  → Make sure an account exists. If the database is empty, run:
+      php tools/install.php        (creates the administrator)
+      php tools/demo_accounts.php  (one account per role)
+
+Port 8000 already in use
+  → Another program is using that port. Edit start.bat and change 8000 to 8080
+    (two places: the php -S line and the start "" http:// line).
+
+
+PROJECT FOLDER LAYOUT
+----------------------
+  index.php, login.php, register.php  — public pages
+  patient/     — patient dashboard and self-booking
+  health/      — health worker tools (patients, new appointment)
+  doctor/      — doctor queue and day schedule
+  admin/       — administrator reports, users, audit log
+  config/      — database connection settings
+  includes/    — shared PHP: session, security, helpers, translations
+  assets/      — style.css (~5 KB) and app.js (~6 KB, offline logic)
+  tools/       — automated test suite (selftest.php, offline_test.mjs)
+  docs/        — DATABASE.md, DEPLOYMENT.md, TESTING.md
+  database.sql — full MySQL/MariaDB schema
+  start.bat    — start everything with one double-click
+  stop.bat     — stop everything with one double-click
+
+
+RUNNING THE AUTOMATED TESTS
+-----------------------------
+  php tools/selftest.php          (73 checks — should all pass; seeds its
+                                   own data in a rolled-back transaction)
+  node tools/offline_test.mjs     (37 checks — requires Node.js 18+)
+
+
+DEPLOYMENT TO A REAL SERVER
+-----------------------------
+See  docs\DEPLOYMENT.md  for production setup:
+dedicated database user, HTTPS, Apache/nginx config, backups, and a
+go-live checklist.
+
+============================================================
