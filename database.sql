@@ -1,6 +1,6 @@
 -- =====================================================================
 -- database.sql  --  Lufwanyama District Telemedicine System
--- MySQL / MariaDB schema (developed for XAMPP's MariaDB 10.4+)
+-- MySQL schema (MySQL 8.0 or later; 5.7 also works but ignores CHECK)
 --
 -- Design: the doctor works INSIDE the health centre. There is no separate
 -- referral hospital. An appointment names the health centre that will see
@@ -8,7 +8,7 @@
 -- centre (doctor_id); NULL means "any doctor at the centre".
 --
 -- Import with phpMyAdmin (Import tab) or:
---   mysql -u root < database.sql
+--   mysql -u root -p < database.sql
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS telemedicine
@@ -48,8 +48,10 @@ CREATE TABLE users (
   KEY users_role_idx (role),
   KEY users_facility_idx (facility_id),
   CONSTRAINT users_facility_fk FOREIGN KEY (facility_id) REFERENCES facilities(facility_id),
-  -- email, when given, must be lower-case so that logging in is not case-sensitive
-  CONSTRAINT users_email_lower CHECK (email IS NULL OR email = LOWER(email)),
+  -- email, when given, must be stored lower-case. The COLLATE is required:
+  -- the column's utf8mb4_unicode_ci collation compares case-insensitively, so a
+  -- plain `email = LOWER(email)` is always true and would enforce nothing.
+  CONSTRAINT users_email_lower CHECK (email IS NULL OR email COLLATE utf8mb4_bin = LOWER(email)),
   -- clinical staff (health workers AND doctors) must belong to a health centre
   CONSTRAINT users_staff_facility CHECK (
     role NOT IN ('health_worker','doctor') OR facility_id IS NOT NULL
@@ -78,8 +80,8 @@ CREATE TABLE patients (
   KEY patients_name_idx (full_name),
   CONSTRAINT patients_user_fk     FOREIGN KEY (user_id)     REFERENCES users(user_id)          ON DELETE SET NULL,
   CONSTRAINT patients_facility_fk FOREIGN KEY (facility_id) REFERENCES facilities(facility_id) ON DELETE SET NULL
-  -- (date-of-birth-not-in-future is enforced in PHP: MariaDB does not allow
-  --  CURRENT_DATE inside a CHECK constraint.)
+  -- (date-of-birth-not-in-future is enforced in PHP: MySQL does not allow
+  --  non-deterministic functions such as CURRENT_DATE in a CHECK constraint.)
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------

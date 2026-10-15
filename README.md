@@ -7,12 +7,12 @@ and answers the request; the patient follows the status before spending money on
 travel. There is no separate referral hospital: every facility is a health
 centre with its own health workers and doctors.
 
-**Stack:** PHP 8.1+ (no framework) &middot; MySQL / MariaDB (XAMPP) &middot; plain HTML, CSS and JavaScript.
+**Stack:** PHP 8.1+ (no framework) &middot; MySQL &middot; plain HTML, CSS and JavaScript.
 
 | | |
 |---|---|
 | Roles | patient, health worker, doctor, administrator |
-| Database | MySQL / MariaDB, six entities, PDO prepared statements throughout |
+| Database | MySQL, six entities, PDO prepared statements throughout |
 | Passwords | Argon2id (bcrypt fallback) |
 | Page weight | 13-23 KB per page including CSS and JS, against a 250 KB budget |
 | Offline | form drafts and queued submissions in `localStorage` |
@@ -25,7 +25,7 @@ centre with its own health workers and doctors.
 | Tool | Version | Notes |
 |---|---|---|
 | PHP | 8.1 or later | with `pdo_mysql`, `mbstring`, `session`, `openssl` (XAMPP has all of these) |
-| MySQL / MariaDB | MySQL 5.7+ / MariaDB 10.4+ | XAMPP ships MariaDB |
+| MySQL | 8.4 LTS | developed and tested on 8.4.11; 5.7 works, but parses `CHECK` constraints without enforcing them |
 | A browser | any modern one | Chrome/Edge DevTools are used for the throttling tests |
 | Node.js | 18 or later | **optional**, only to run `tools/offline_test.mjs` |
 
@@ -47,7 +47,7 @@ The system starts **fresh**: no demo patients or appointments. `tools/install.ph
 creates the database, the schema and a single administrator account; everything
 else is created from inside the app.
 
-### Plain PHP + a MySQL/MariaDB server (recommended)
+### Plain PHP + a MySQL server (recommended)
 
 ```
 copy config\config.sample.php config\config.local.php      REM edit if your login differs
@@ -60,7 +60,7 @@ php -S localhost:8000 router.php
 runs. `php tools/install.php --reset` drops the database and rebuilds it (and
 recreates the admin). Both refuse to run from a browser.
 
-On Windows you can instead double-click **`start.bat`**, which starts MariaDB and
+On Windows you can instead double-click **`start.bat`**, which starts MySQL and
 the web server together and opens the browser.
 
 ### Setup under XAMPP
@@ -225,8 +225,7 @@ no web fonts, images or frameworks, so pages stay well under the weight budget.
 
 ## 10. Testing
 
-Two automated suites, 110 checks in total, both green on this build (MariaDB
-11.4):
+Two automated suites, 110 checks in total, both green on MySQL 8.4.11:
 
 ```
 php tools/selftest.php       # 73 checks: schema, hashing, RBAC, isolation,
@@ -256,7 +255,7 @@ and the go-live checklist are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ```
 index.php  login.php  register.php  logout.php   public pages
-database.sql                                     MySQL / MariaDB schema
+database.sql                                     MySQL schema
 router.php                                       guard for php -S
 start.bat  stop.bat                              one-click run / stop on Windows
 config/      db.php, config.sample.php           connection and environment

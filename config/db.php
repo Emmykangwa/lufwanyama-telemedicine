@@ -2,7 +2,7 @@
 /**
  * config/db.php
  *
- * MySQL / MariaDB connection via PDO. Every query in this application uses
+ * MySQL connection via PDO. Every query in this application uses
  * prepared statements with bound parameters, so user input is never
  * concatenated into SQL.
  *
@@ -74,11 +74,11 @@ try {
         exit('The service is temporarily unavailable. Please try again shortly.');
     }
     exit(
-        "<h2>Database connection failed</h2><p>Is MySQL/MariaDB running in XAMPP, and are the "
+        "<h2>Database connection failed</h2><p>Is the MySQL server running, and are the "
         . "credentials in <code>config/config.local.php</code> correct?</p><pre>"
         . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</pre>'
     );
 }
 
-// Duplicate-key SQLSTATE is 23000 in MySQL/MariaDB (driver error 1062).
+// Duplicate-key SQLSTATE is 23000 in MySQL (driver error 1062).
 const SQLSTATE_UNIQUE_VIOLATION = '23000';

@@ -6,7 +6,7 @@ QUICK START (recommended)
 --------------------------
 1. Double-click  start.bat  in this folder.
    That's it. The script will:
-     • Start MariaDB (the database server) if it is not already running
+     • Start the MySQL database server if it is not already running
      • Start the PHP web server on http://localhost:8000
      • Open your browser to the login page automatically
 
@@ -15,7 +15,9 @@ QUICK START (recommended)
 
 WHAT IS ALREADY SET UP
 -----------------------
-• MariaDB 11.4.4 is installed at  C:\mariadb
+• MySQL 8.4.11 is installed at  C:\mysql  and listens on port 3306.
+  start.bat starts it automatically, and falls back to
+  C:\Program Files\MySQL\MySQL Server*\bin or C:\xampp\mysql\bin
 • The database "telemedicine" is created with all six tables
 • No demo patients or appointments: the records start empty
 • One login for each role already exists (see below)
@@ -48,8 +50,8 @@ MANUAL START (if start.bat does not work)
 -----------------------------------------
 Open a Command Prompt (cmd.exe) and run these two commands:
 
-  Step 1 — start the database:
-    "C:\mariadb\bin\mysqld.exe" --defaults-file="C:\mariadb\my.ini" --standalone
+  Step 1 — start the MySQL server:
+    "C:\mysql\bin\mysqld.exe" --defaults-file="C:\mysql\my.ini"
 
   Step 2 — open a second Command Prompt and start the web server:
     cd "C:\emmy project"
@@ -63,14 +65,19 @@ STOPPING THE SERVER
 --------------------
 • Double-click stop.bat, OR
 • Press Ctrl+C in the PHP server window, then run:
-    "C:\mariadb\bin\mysqladmin.exe" -u root shutdown
+    "C:\mysql\bin\mysqladmin.exe" -u root shutdown
 
 
 TROUBLESHOOTING
 ---------------
 "Database connection failed"
-  → MariaDB is not running. Double-click start.bat again, or start it manually
+  → The MySQL server is not running. Double-click start.bat again, or start
     with the command in MANUAL START above.
+
+"Can't connect" / port 3306 already in use
+  → XAMPP also ships a database server on port 3306. Only one server can
+    use the port, so stop MySQL in the XAMPP Control Panel before running
+    start.bat (this project uses the MySQL at C:\mysql).
 
 "could not find driver"
   → pdo_mysql is not enabled. Open C:\php\php.ini, search for "pdo_mysql",
@@ -107,7 +114,7 @@ PROJECT FOLDER LAYOUT
   assets/      — style.css (~5 KB) and app.js (~6 KB, offline logic)
   tools/       — automated test suite (selftest.php, offline_test.mjs)
   docs/        — DATABASE.md, DEPLOYMENT.md, TESTING.md
-  database.sql — full MySQL/MariaDB schema
+  database.sql — full MySQL schema
   start.bat    — start everything with one double-click
   stop.bat     — stop everything with one double-click
 

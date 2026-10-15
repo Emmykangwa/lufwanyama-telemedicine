@@ -9,7 +9,7 @@ How to run the Lufwanyama District Telemedicine System on a new PC.
 | Software | Version | Download |
 |---|---|---|
 | PHP | 8.1 or later | https://windows.php.net/download/ (Thread Safe zip) |
-| MariaDB or MySQL | MariaDB 10.4+ / MySQL 5.7+ | https://mariadb.org/download/ |
+| MySQL | 8.0 or later (5.7 works) | https://dev.mysql.com/downloads/mysql/ |
 | Git | any recent version | https://git-scm.com/downloads |
 | Node.js (optional) | 18 or later | https://nodejs.org/ — only needed to run the offline JS tests |
 
@@ -41,7 +41,7 @@ git clone https://github.com/Emmykangwa/lufwanyama-telemedicine.git
 cd lufwanyama-telemedicine
 ```
 
-### 2. Start MariaDB / MySQL
+### 2. Start MySQL
 
 Make sure your database server is running on port 3306.
 
@@ -103,7 +103,7 @@ node tools/offline_test.mjs
 
 ## XAMPP Alternative
 
-If using XAMPP instead of standalone PHP + MariaDB:
+If using XAMPP instead of standalone PHP + MySQL:
 
 1. Copy the project folder into `C:\xampp\htdocs\telemed`
 2. Start **Apache** and **MySQL** from the XAMPP Control Panel

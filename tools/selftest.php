@@ -136,7 +136,7 @@ function seed_fixtures(PDO $pdo): array
 $pdo->beginTransaction();
 $FX = seed_fixtures($pdo);
 
-echo "Telemedicine self-test (MySQL / MariaDB)\n========================================";
+echo "Telemedicine self-test (MySQL)\n==============================";
 
 // ---------------------------------------------------------------------
 section('1. Schema');

@@ -1,6 +1,6 @@
 # Deployment
 
-For a district office server, a VPS or shared hosting with MySQL/MariaDB. The
+For a district office server, a VPS or shared hosting with MySQL. The
 development setup in the [README](../README.md) is not suitable for real
 patient data: it runs as the database root user with errors on screen.
 
@@ -9,7 +9,7 @@ patient data: it runs as the database root user with errors on screen.
 ## 1. Server requirements
 
 * PHP 8.1+ (FPM or mod_php) with `pdo_mysql`, `mbstring`, `session`, `openssl`
-* MySQL 5.7+ or MariaDB 10.4+
+* MySQL 8.0 or later (5.7 works, without `CHECK` enforcement)
 * Apache with `mod_headers` and `mod_deflate`, or nginx
 * A domain name and a TLS certificate
 
@@ -177,5 +177,5 @@ mysql -u root -p telemedicine_restore_test < telemed_2026-10-07.sql
 | Check the audit log for `LOGIN_BLOCKED` and failed logins | weekly |
 | Deactivate accounts of staff who have left | as it happens |
 | Confirm the nightly backup actually ran | weekly |
-| Apply PHP and MySQL/MariaDB security updates | as released |
+| Apply PHP and MySQL security updates | as released |
 | Archive audit rows older than the retention period agreed with the district | yearly |
