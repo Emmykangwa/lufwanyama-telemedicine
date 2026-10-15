@@ -55,7 +55,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 $page_title = t('add_patient');
 require __DIR__ . '/../includes/header.php';
 ?>
-<div class="card">
+<div class="card card--form">
   <p class="hint">For residents with no phone of their own. A patient number is generated automatically.</p>
   <?php if ($err): ?><div class="msg err"><?= icon('alert') ?><span><?= e($err) ?></span></div><?php endif; ?>
 
@@ -65,21 +65,31 @@ require __DIR__ . '/../includes/header.php';
     <label for="full_name"><?= e(t('full_name')) ?></label>
     <input id="full_name" name="full_name" value="<?= e($old['full_name']) ?>" maxlength="120" required>
 
-    <label for="phone"><?= e(t('phone')) ?> (optional)</label>
-    <input id="phone" name="phone" inputmode="tel" pattern="\+?[0-9]{9,15}" value="<?= e($old['phone']) ?>">
+    <div class="fgrid">
+      <div class="fld">
+        <label for="phone"><?= e(t('phone')) ?> (optional)</label>
+        <input id="phone" name="phone" inputmode="tel" pattern="\+?[0-9]{9,15}" value="<?= e($old['phone']) ?>">
+      </div>
+      <div class="fld">
+        <label for="dob"><?= e(t('dob')) ?></label>
+        <input id="dob" name="dob" type="date" max="<?= e(today()) ?>" value="<?= e($old['dob']) ?>">
+      </div>
+    </div>
 
-    <label for="dob"><?= e(t('dob')) ?></label>
-    <input id="dob" name="dob" type="date" max="<?= e(today()) ?>" value="<?= e($old['dob']) ?>">
-
-    <label for="sex"><?= e(t('sex')) ?></label>
-    <select id="sex" name="sex">
-      <option value="">--</option>
-      <option value="F"<?= $old['sex'] === 'F' ? ' selected' : '' ?>><?= e(t('female')) ?></option>
-      <option value="M"<?= $old['sex'] === 'M' ? ' selected' : '' ?>><?= e(t('male')) ?></option>
-    </select>
-
-    <label for="village"><?= e(t('village')) ?></label>
-    <input id="village" name="village" value="<?= e($old['village']) ?>" maxlength="100">
+    <div class="fgrid">
+      <div class="fld">
+        <label for="sex"><?= e(t('sex')) ?></label>
+        <select id="sex" name="sex">
+          <option value="">--</option>
+          <option value="F"<?= $old['sex'] === 'F' ? ' selected' : '' ?>><?= e(t('female')) ?></option>
+          <option value="M"<?= $old['sex'] === 'M' ? ' selected' : '' ?>><?= e(t('male')) ?></option>
+        </select>
+      </div>
+      <div class="fld">
+        <label for="village"><?= e(t('village')) ?></label>
+        <input id="village" name="village" value="<?= e($old['village']) ?>" maxlength="100">
+      </div>
+    </div>
 
     <button type="submit"><?= icon('save') ?><?= e(t('save')) ?></button>
   </form>

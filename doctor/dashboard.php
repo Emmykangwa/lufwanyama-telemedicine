@@ -105,17 +105,120 @@ if (in_array($view, statuses(), true)) {
     $sql .= " AND a.status IN ('pending','confirmed','rescheduled')";
 }
 
+// Paged: each row renders as a full case card, so an unbounded list is the
+// heaviest page in the system and would pass the project's page-weight
+// budget for 2G and 3G links.
+$per   = 15;
+$page  = max(1, (int)($_GET['p'] ?? 1));
+$cntSql = preg_replace('/^SELECT .*? FROM /s', 'SELECT COUNT(*) FROM ', $sql, 1);
+$st = $pdo->prepare($cntSql);
+$st->execute($args);
+$found = (int)$st->fetchColumn();
+$pages = max(1, (int)ceil($found / $per));
+$page  = min($page, $pages);
+
 $sql .= " ORDER BY FIELD(a.status, 'pending','rescheduled','confirmed','declined','completed'),
                    a.appointment_date, a.appointment_id
-          LIMIT 200";
+          LIMIT " . $per . ' OFFSET ' . (($page - 1) * $per);
 
 $st = $pdo->prepare($sql);
 $st->execute($args);
 $rows = $st->fetchAll();
 
+// Queue summary across everything this doctor can see, independent of the
+// filter above, so the figures do not move when the view is narrowed.
+$st = $pdo->prepare(
+    "SELECT a.status AS k, COUNT(*) AS c
+       FROM appointments a
+      WHERE a.facility_id = ? AND (a.doctor_id = ? OR a.doctor_id IS NULL)
+      GROUP BY a.status"
+);
+$st->execute([(int)$me['facility_id'], (int)$me['user_id']]);
+$counts = [];
+foreach ($st->fetchAll() as $r) {
+    $counts[(string)$r['k']] = (int)$r['c'];
+}
+$queue   = (int)($counts['pending'] ?? 0);
+$allSeen = array_sum($counts);
+
+// A week-by-week series, so the graphic shows a trend rather than five
+// fat blocks of status totals.
+$st = $pdo->prepare(
+    "SELECT a.appointment_date AS d FROM appointments a
+      WHERE a.facility_id = ? AND (a.doctor_id = ? OR a.doctor_id IS NULL)"
+);
+$st->execute([(int)$me['facility_id'], (int)$me['user_id']]);
+$weeks = [];
+for ($i = 15; $i >= 0; $i--) {
+    $weeks[date('o-W', strtotime("-{$i} week"))] = 0;
+}
+foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $d) {
+    $w = date('o-W', strtotime((string)$d));
+    if (isset($weeks[$w])) {
+        $weeks[$w]++;
+    }
+}
+$trend = array_values($weeks);
+
+// Built from the doctor's whole queue, not the page on screen, so the month
+// grid stays still while they page through cases.
+$st = $pdo->prepare(
+    "SELECT a.appointment_date AS k, a.status AS s FROM appointments a
+      WHERE a.facility_id = ? AND (a.doctor_id = ? OR a.doctor_id IS NULL)"
+);
+$st->execute([(int)$me['facility_id'], (int)$me['user_id']]);
+$marked = [];
+$prio   = ['pending' => 5, 'rescheduled' => 4, 'confirmed' => 3, 'completed' => 2, 'declined' => 1];
+foreach ($st->fetchAll() as $r) {
+    $d = (string)$r['k'];
+    $s = (string)$r['s'];
+    if (!isset($marked[$d]) || ($prio[$s] ?? 0) > ($prio[$marked[$d]] ?? 0)) {
+        $marked[$d] = $s;
+    }
+}
+$statusRows = [];
+foreach (statuses() as $s) {
+    if ((int)($counts[$s] ?? 0) > 0) {
+        $statusRows[] = ['k' => $s, 'c' => (int)$counts[$s]];
+    }
+}
+
 $page_title = t('incoming');
 require __DIR__ . '/../includes/header.php';
 ?>
+<div class="metrics">
+<?= metric('Waiting for you', (string)$queue, 'to review',
+      spark_bars($trend),
+      $queue > 0 ? 'Review these so patients know whether to travel'
+                 : 'Your queue is clear') ?>
+
+<?= metric('Confirmed by you',
+      (string)((int)($counts['confirmed'] ?? 0) + (int)($counts['rescheduled'] ?? 0)), 'visits',
+      spark_line($trend),
+      'Patients cleared to travel to the centre') ?>
+
+<?= metric('Completed', (string)(int)($counts['completed'] ?? 0), 'visits',
+      spark_line([0, (int)($counts['completed'] ?? 0)]),
+      'Consultations already carried out') ?>
+
+<?= metric('All in your queue', (string)$allSeen, $allSeen === 1 ? 'request' : 'requests',
+      spark_bars($trend),
+      'Everything at your centre assigned to you or unassigned') ?>
+</div>
+
+<div class="cols cols--even">
+<?php if ($statusRows): ?>
+  <?= panel_open('Queue breakdown') ?>
+    <?= status_split($statusRows) ?>
+  <?= panel_close() ?>
+<?php endif; ?>
+  <?= panel_open('Days in view',
+        '<a class="btn alt mini noprint" href="' . e(url('/doctor/schedule.php')) . '">'
+        . icon('calendar') . e(t('my_schedule')) . '</a>') ?>
+    <?= mini_cal(date('Y-m-01'), $marked) ?>
+  <?= panel_close() ?>
+</div>
+
 <form method="get" class="card noprint row">
   <div>
     <label for="view">Show</label>
@@ -132,6 +235,8 @@ require __DIR__ . '/../includes/header.php';
 
 <?php if (!$rows): ?>
   <div class="card"><?= e(t('no_records')) ?></div>
+<?php else: ?>
+  <p class="hint">Showing <?= count($rows) ?> of <?= $found ?> case(s)<?= $pages > 1 ? ' — page ' . $page . ' of ' . $pages : '' ?>.</p>
 <?php endif; ?>
 
 <?php foreach ($rows as $r): ?>
@@ -189,4 +294,5 @@ require __DIR__ . '/../includes/header.php';
 <?php endif; ?>
 </div>
 <?php endforeach; ?>
+<?= pager($page, $pages, array_filter(['view' => $view])) ?>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

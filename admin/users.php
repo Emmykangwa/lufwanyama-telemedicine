@@ -155,7 +155,7 @@ $users = $pdo->query(
 $page_title = t('users');
 require __DIR__ . '/../includes/header.php';
 ?>
-<div class="card">
+<div class="card card--form">
   <h2>Create a staff account</h2>
   <?php if ($err): ?><div class="msg err"><?= icon('alert') ?><span><?= e($err) ?></span></div><?php endif; ?>
   <form method="post">
@@ -165,28 +165,38 @@ require __DIR__ . '/../includes/header.php';
     <label for="full_name"><?= e(t('full_name')) ?></label>
     <input id="full_name" name="full_name" value="<?= e($old['full_name']) ?>" maxlength="120" required>
 
-    <label for="phone"><?= e(t('phone')) ?></label>
-    <input id="phone" name="phone" inputmode="tel" pattern="\+?[0-9]{9,15}" value="<?= e($old['phone']) ?>" required>
+    <div class="fgrid">
+      <div class="fld">
+        <label for="phone"><?= e(t('phone')) ?></label>
+        <input id="phone" name="phone" inputmode="tel" pattern="\+?[0-9]{9,15}" value="<?= e($old['phone']) ?>" required>
+      </div>
+      <div class="fld">
+        <label for="email"><?= e(t('email')) ?></label>
+        <input id="email" name="email" type="email" value="<?= e($old['email']) ?>" maxlength="120">
+      </div>
+    </div>
 
-    <label for="email"><?= e(t('email')) ?></label>
-    <input id="email" name="email" type="email" value="<?= e($old['email']) ?>" maxlength="120">
-
-    <label for="role"><?= e(t('role')) ?></label>
-    <select id="role" name="role">
-      <option value="health_worker"<?= $old['role'] === 'health_worker' ? ' selected' : '' ?>>Health worker</option>
-      <option value="doctor"<?= $old['role'] === 'doctor' ? ' selected' : '' ?>>Doctor</option>
-      <option value="admin"<?= $old['role'] === 'admin' ? ' selected' : '' ?>>Administrator</option>
-    </select>
-
-    <label for="facility_id"><?= e(t('centre')) ?></label>
-    <select id="facility_id" name="facility_id">
-      <option value="0">-- none (administrator only) --</option>
+    <div class="fgrid">
+      <div class="fld">
+        <label for="role"><?= e(t('role')) ?></label>
+        <select id="role" name="role">
+          <option value="health_worker"<?= $old['role'] === 'health_worker' ? ' selected' : '' ?>>Health worker</option>
+          <option value="doctor"<?= $old['role'] === 'doctor' ? ' selected' : '' ?>>Doctor</option>
+          <option value="admin"<?= $old['role'] === 'admin' ? ' selected' : '' ?>>Administrator</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label for="facility_id"><?= e(t('centre')) ?></label>
+        <select id="facility_id" name="facility_id">
+          <option value="0">-- none (administrator only) --</option>
 <?php foreach ($facilities as $f): if (!(int)$f['is_active']) { continue; } ?>
-      <option value="<?= (int)$f['facility_id'] ?>"<?= (int)$f['facility_id'] === (int)$old['facility_id'] ? ' selected' : '' ?>>
-        <?= e($f['name']) ?>
-      </option>
+          <option value="<?= (int)$f['facility_id'] ?>"<?= (int)$f['facility_id'] === (int)$old['facility_id'] ? ' selected' : '' ?>>
+            <?= e($f['name']) ?>
+          </option>
 <?php endforeach; ?>
-    </select>
+        </select>
+      </div>
+    </div>
     <p class="hint">Health workers and doctors both belong to a health centre.</p>
 
     <label for="password"><?= e(t('password')) ?> (at least 8 characters)</label>
@@ -224,7 +234,7 @@ require __DIR__ . '/../includes/header.php';
 </table>
 </div>
 
-<div class="card noprint">
+<div class="card card--form noprint">
   <h2>Reset a password</h2>
   <form method="post">
     <?= csrf_field() ?>

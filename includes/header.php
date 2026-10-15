@@ -51,7 +51,7 @@ if ($user) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#4f46e5">
+<meta name="theme-color" content="#10785a">
 <meta name="description" content="Lufwanyama District Telemedicine — request a health centre appointment and consult a doctor before you travel.">
 <title><?= e($page_title) ?> &middot; <?= e(t('app_name')) ?></title>
 <link rel="stylesheet" href="<?= e(url('/assets/css/style.css')) ?>">

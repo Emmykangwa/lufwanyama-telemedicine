@@ -58,7 +58,19 @@ if (in_array($status, statuses(), true)) {
     $sql   .= ' AND a.status = ?';
     $args[] = $status;
 }
-$sql .= ' ORDER BY a.appointment_date DESC, a.appointment_id DESC LIMIT 300';
+// Paged: an unbounded list would grow past the page-weight budget the
+// project sets for 2G and 3G links as the centre accumulates records.
+$per   = 25;
+$page  = max(1, (int)($_GET['p'] ?? 1));
+$cntSql = preg_replace('/^SELECT .*? FROM /s', 'SELECT COUNT(*) FROM ', $sql, 1);
+$st = $pdo->prepare($cntSql);
+$st->execute($args);
+$found = (int)$st->fetchColumn();
+$pages = max(1, (int)ceil($found / $per));
+$page  = min($page, $pages);
+
+$sql .= ' ORDER BY a.appointment_date DESC, a.appointment_id DESC LIMIT '
+      . $per . ' OFFSET ' . (($page - 1) * $per);
 
 $st = $pdo->prepare($sql);
 $st->execute($args);
@@ -72,13 +84,69 @@ foreach ($st->fetchAll() as $row) {
     $counts[$row['status']] = (int)$row['c'];
 }
 
+// Daily volume at this centre, for the trend graphics.
+$st = $pdo->prepare("SELECT appointment_date AS k, COUNT(*) AS c FROM appointments
+                      WHERE facility_id = ? GROUP BY k ORDER BY k");
+$st->execute([$fac]);
+$byDay  = $st->fetchAll();
+$trend  = array_map(static fn(array $r): int => (int)$r['c'], $byDay) ?: [0, 0];
+
+// Built from every row at this centre, not the page being shown, so the
+// month grid does not change as the user pages through the list.
+$st = $pdo->prepare('SELECT appointment_date AS k, status AS s FROM appointments
+                      WHERE facility_id = ?');
+$st->execute([$fac]);
+$marked = [];
+$prio   = ['pending' => 5, 'rescheduled' => 4, 'confirmed' => 3, 'completed' => 2, 'declined' => 1];
+foreach ($st->fetchAll() as $r) {
+    $d = (string)$r['k'];
+    $s = (string)$r['s'];
+    if (!isset($marked[$d]) || ($prio[$s] ?? 0) > ($prio[$marked[$d]] ?? 0)) {
+        $marked[$d] = $s;
+    }
+}
+
+$totalAll = array_sum($counts);
+$open     = (int)($counts['pending'] ?? 0);
+$ready    = (int)($counts['confirmed'] ?? 0) + (int)($counts['rescheduled'] ?? 0);
+$statusRows = [];
+foreach (statuses() as $s) {
+    if ((int)($counts[$s] ?? 0) > 0) {
+        $statusRows[] = ['k' => $s, 'c' => (int)$counts[$s]];
+    }
+}
+// the soonest day that still needs a doctor's reply
+$nextPending = null;
+foreach (array_reverse($rows) as $r) {
+    if ($r['status'] === 'pending' && $r['appointment_date'] >= today()) {
+        $nextPending = $r;
+        break;
+    }
+}
+
 $page_title = t('dashboard');
 require __DIR__ . '/../includes/header.php';
 ?>
-<div class="stats">
-<?php foreach (statuses() as $s): ?>
-  <div class="stat"><span><?= e(t($s)) ?></span><b><?= (int)($counts[$s] ?? 0) ?></b></div>
-<?php endforeach; ?>
+<div class="metrics">
+<?= metric('All requests', (string)$totalAll, $totalAll === 1 ? 'request' : 'requests',
+      spark_bars($trend),
+      'Everything raised at this health centre') ?>
+
+<?= metric('Awaiting a doctor', (string)$open, 'pending',
+      spark_line($trend),
+      $open > 0
+        ? ($nextPending
+            ? 'Soonest is <b>' . e(date('j M', strtotime((string)$nextPending['appointment_date']))) . '</b>'
+            : 'Waiting on a doctor&rsquo;s review')
+        : 'Every request has had a reply') ?>
+
+<?= metric('Patient may travel', (string)$ready, 'confirmed',
+      spark_bars(array_map(static fn(string $s): int => (int)($counts[$s] ?? 0), statuses())),
+      'Confirmed or rescheduled by a doctor') ?>
+
+<?= metric('Seen', (string)(int)($counts['completed'] ?? 0), 'completed',
+      spark_line([0, (int)($counts['completed'] ?? 0)]),
+      'Visits already carried out') ?>
 </div>
 
 <p class="noprint actions">
@@ -86,6 +154,17 @@ require __DIR__ . '/../includes/header.php';
   <a class="btn alt" href="<?= e(url('/health/add_patient.php')) ?>"><?= icon('userplus') ?><?= e(t('add_patient')) ?></a>
   <a class="btn alt" href="<?= e(url('/health/patients.php')) ?>"><?= icon('users') ?><?= e(t('patients')) ?></a>
 </p>
+
+<div class="cols cols--even">
+<?php if ($statusRows): ?>
+  <?= panel_open('Where requests stand') ?>
+    <?= status_split($statusRows) ?>
+  <?= panel_close() ?>
+<?php endif; ?>
+  <?= panel_open('Appointment days') ?>
+    <?= mini_cal(date('Y-m-01'), $marked) ?>
+  <?= panel_close() ?>
+</div>
 
 <form method="get" class="card noprint row">
   <div>
@@ -102,7 +181,7 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="scroll">
 <table>
-  <caption><?= count($rows) ?> request(s) at this health centre.</caption>
+  <caption>Showing <?= count($rows) ?> of <?= $found ?> request(s) at this health centre<?= $pages > 1 ? ' — page ' . $page . ' of ' . $pages : '' ?>.</caption>
   <tr>
     <th><?= e(t('patient')) ?></th><th><?= e(t('status')) ?></th><th><?= e(t('date')) ?></th>
     <th><?= e(t('doctor')) ?></th><th><?= e(t('department')) ?></th><th><?= e(t('response')) ?></th><th></th>
@@ -143,4 +222,5 @@ require __DIR__ . '/../includes/header.php';
 <?php endforeach; ?>
 </table>
 </div>
+<?= pager($page, $pages, array_filter(['status' => $status])) ?>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

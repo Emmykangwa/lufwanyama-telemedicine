@@ -93,6 +93,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/lang.php';
+require_once __DIR__ . '/ui.php';
 
 // Expire an idle or very old session before any page can use it.
 if (!empty($_SESSION['user'])) {

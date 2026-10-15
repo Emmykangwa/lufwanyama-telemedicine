@@ -116,7 +116,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 $page_title = t('book');
 require __DIR__ . '/../includes/header.php';
 ?>
-<div class="card">
+<div class="card card--form">
   <h2><?= e(t('book')) ?></h2>
   <p class="hint">A doctor at the health centre will confirm, suggest another date, or decline with a reason.</p>
   <?php if ($err): ?><div class="msg err"><?= e($err) ?></div><?php endif; ?>
@@ -144,17 +144,22 @@ require __DIR__ . '/../includes/header.php';
 <?php endforeach; ?>
     </select>
 
-    <label for="department"><?= e(t('department')) ?></label>
-    <select id="department" name="department" required>
-      <option value=""><?= e(t('select')) ?></option>
+    <div class="fgrid">
+      <div class="fld">
+        <label for="department"><?= e(t('department')) ?></label>
+        <select id="department" name="department" required>
+          <option value=""><?= e(t('select')) ?></option>
 <?php foreach (departments() as $d): ?>
-      <option value="<?= e($d) ?>"<?= $d === $old['department'] ? ' selected' : '' ?>><?= e($d) ?></option>
+          <option value="<?= e($d) ?>"<?= $d === $old['department'] ? ' selected' : '' ?>><?= e($d) ?></option>
 <?php endforeach; ?>
-    </select>
-
-    <label for="appointment_date"><?= e(t('date')) ?></label>
-    <input id="appointment_date" name="appointment_date" type="date" min="<?= e(today()) ?>"
-           value="<?= e($old['appointment_date']) ?>" required>
+        </select>
+      </div>
+      <div class="fld">
+        <label for="appointment_date"><?= e(t('date')) ?></label>
+        <input id="appointment_date" name="appointment_date" type="date" min="<?= e(today()) ?>"
+               value="<?= e($old['appointment_date']) ?>" required>
+      </div>
+    </div>
 
     <label for="reason"><?= e(t('reason')) ?></label>
     <input id="reason" name="reason" maxlength="255" value="<?= e($old['reason']) ?>"
