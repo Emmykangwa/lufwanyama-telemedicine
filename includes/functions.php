@@ -108,11 +108,110 @@ function greeting(): string
     return $h < 17 ? 'Good afternoon' : 'Good evening';
 }
 
-/** The first name only, for a friendly heading. */
+/**
+ * The name to greet someone by. A title is kept with the surname
+ * ("Dr Grace Banda" -> "Dr Banda"), otherwise the first name is used.
+ */
 function first_name(string $name): string
 {
-    $parts = preg_split('/\s+/', trim($name)) ?: [];
-    return $parts[0] ?? $name;
+    $parts = array_values(array_filter(preg_split('/\s+/', trim($name)) ?: []));
+    if (!$parts) {
+        return $name;
+    }
+    $title = rtrim(strtolower($parts[0]), '.');
+    if (count($parts) > 1 && in_array($title, ['dr', 'mr', 'mrs', 'ms', 'miss', 'prof', 'sr', 'sister', 'nurse'], true)) {
+        return $parts[0] . ' ' . $parts[count($parts) - 1];
+    }
+    return $parts[0];
+}
+
+/** Human label for a role key. */
+function role_label(string $role): string
+{
+    return [
+        'patient'       => 'Patient',
+        'health_worker' => 'Health worker',
+        'doctor'        => 'Doctor',
+        'admin'         => 'Administrator',
+    ][$role] ?? ucfirst(str_replace('_', ' ', $role));
+}
+
+/** "19 Oct 2026" from a Y-m-d (or datetime) string; '' stays ''. */
+function fmt_date(?string $d, bool $withYear = true): string
+{
+    if ($d === null || $d === '') {
+        return '';
+    }
+    $ts = strtotime($d);
+    return $ts ? date($withYear ? 'j M Y' : 'j M', $ts) : $d;
+}
+
+/** "19 Oct 2026, 14:05" from a datetime string. */
+function fmt_datetime(?string $d): string
+{
+    if ($d === null || $d === '') {
+        return '';
+    }
+    $ts = strtotime($d);
+    return $ts ? date('j M Y, H:i', $ts) : $d;
+}
+
+/** "Today", "Tomorrow", "in 5 days", "3 days ago" relative to today. */
+function rel_day(string $d): string
+{
+    $diff = (int)round((strtotime(substr($d, 0, 10)) - strtotime(today())) / 86400);
+    return match (true) {
+        $diff === 0  => 'Today',
+        $diff === 1  => 'Tomorrow',
+        $diff === -1 => 'Yesterday',
+        $diff > 1    => 'in ' . $diff . ' days',
+        default      => abs($diff) . ' days ago',
+    };
+}
+
+/** How long ago something happened: "just now", "3 h ago", "yesterday", "5 days ago". */
+function since(?string $dt): string
+{
+    if ($dt === null || $dt === '' || !($ts = strtotime($dt))) {
+        return '';
+    }
+    $secs = time() - $ts;
+    return match (true) {
+        $secs < 3600          => 'just now',
+        $secs < 86400         => (int)floor($secs / 3600) . ' h ago',
+        $secs < 2 * 86400     => 'yesterday',
+        $secs < 30 * 86400    => (int)floor($secs / 86400) . ' days ago',
+        default               => fmt_date($dt),
+    };
+}
+
+/** Age in whole years from a date of birth, or null. */
+function age_from(?string $dob): ?int
+{
+    if (!$dob || !valid_date($dob)) {
+        return null;
+    }
+    return (int)date_diff(date_create($dob), date_create(today()))->y;
+}
+
+/**
+ * A temporary password the administrator can read out or write down:
+ * no look-alike characters (0/O, 1/l/I), always letters, a digit and a symbol.
+ */
+function generate_password(): string
+{
+    $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    $lower = 'abcdefghijkmnpqrstuvwxyz';
+    $digit = '23456789';
+    $pw  = $upper[random_int(0, strlen($upper) - 1)];
+    for ($i = 0; $i < 5; $i++) {
+        $pw .= $lower[random_int(0, strlen($lower) - 1)];
+    }
+    $pw .= '@';
+    for ($i = 0; $i < 4; $i++) {
+        $pw .= $digit[random_int(0, strlen($digit) - 1)];
+    }
+    return $pw;
 }
 
 function redirect(string $path): never
@@ -389,6 +488,23 @@ function clean_get(string $key, int $max = 255): string
 function valid_phone(string $phone): bool
 {
     return (bool)preg_match('/^\+?[0-9]{9,15}$/', $phone);
+}
+
+/**
+ * One canonical form for a Zambian mobile number, so "097 000 0001",
+ * "097-000-0001", "+260 97 000 0001" and "260970000001" all mean the same
+ * account. Numbers from elsewhere are only stripped of spaces and dashes.
+ */
+function normalize_phone(string $phone): string
+{
+    $p = preg_replace('/[\s\-().]/', '', $phone) ?? '';
+    if (preg_match('/^\+?260([0-9]{9})$/', $p, $m)) {
+        return '0' . $m[1];
+    }
+    if (preg_match('/^[0-9]{9}$/', $p) && $p[0] !== '0') {
+        return '0' . $p;   // "970000001" typed without the leading zero
+    }
+    return $p;
 }
 
 function valid_date(string $d): bool

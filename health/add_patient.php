@@ -13,7 +13,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     csrf_check();
 
     $old['full_name'] = clean('full_name', 120);
-    $old['phone']     = str_replace(' ', '', clean('phone', 20));
+    $old['phone']     = normalize_phone(clean('phone', 20));
     $old['dob']       = clean('dob', 10);
     $old['sex']       = clean('sex', 1);
     $old['village']   = clean('village', 100);
@@ -21,9 +21,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     if (mb_strlen($old['full_name']) < 3) {
         $err = 'Please enter the patient name.';
     } elseif ($old['phone'] !== '' && !valid_phone($old['phone'])) {
-        $err = 'That phone number is not valid (9 to 15 digits).';
+        $err = 'That phone number is not valid, for example 097 123 4567.';
     } elseif ($old['dob'] !== '' && (!valid_date($old['dob']) || $old['dob'] > today())) {
         $err = 'The date of birth is not a valid past date.';
+    } elseif ($dup = find_duplicate($pdo, $old, (int)$me['facility_id'])) {
+        $err = $dup;
     } else {
         try {
             $pno = new_patient_number($pdo);
@@ -43,7 +45,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $pid = (int)$pdo->lastInsertId();
 
             audit($pdo, 'CREATE', 'patient', $pid, 'Registered at facility ' . $me['facility_id'] . ', ' . $pno);
-            flash('ok', 'Patient saved. Patient number: ' . $pno);
+            flash('ok', $old['full_name'] . ' registered as ' . $pno . '. Now complete the request.');
             redirect('/health/new_appointment.php?patient_id=' . $pid);
         } catch (PDOException $ex) {
             error_log('Add patient failed: ' . $ex->getMessage());
@@ -52,46 +54,75 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$page_title = t('add_patient');
+/** A likely existing record for the same person, described for the worker, or null. */
+function find_duplicate(PDO $pdo, array $old, int $fac): ?string
+{
+    if ($old['phone'] !== '') {
+        $st = $pdo->prepare('SELECT full_name, patient_number, facility_id FROM patients WHERE phone = ? LIMIT 1');
+        $st->execute([$old['phone']]);
+        if ($d = $st->fetch()) {
+            return (int)$d['facility_id'] === $fac
+                ? 'This phone number already belongs to ' . $d['full_name'] . ' (' . $d['patient_number'] . ') on your register.'
+                : 'A patient with this phone number already exists. Add them from the Patients page with their patient number instead.';
+        }
+    }
+    if ($old['dob'] !== '') {
+        $st = $pdo->prepare('SELECT patient_number FROM patients WHERE facility_id = ? AND full_name = ? AND dob = ? LIMIT 1');
+        $st->execute([$fac, $old['full_name'], $old['dob']]);
+        if ($n = $st->fetchColumn()) {
+            return $old['full_name'] . ' with this date of birth is already registered (' . $n . ').';
+        }
+    }
+    return null;
+}
+
+$page_title = 'Register patient';
+$crumbs     = [['Patients', '/health/patients.php']];
+$nav_active = '/health/add_patient.php';
 require __DIR__ . '/../includes/header.php';
 ?>
-<div class="card card--form">
-  <p class="hint">For residents with no phone of their own. A patient number is generated automatically.</p>
-  <?php if ($err): ?><div class="msg err"><?= icon('alert') ?><span><?= e($err) ?></span></div><?php endif; ?>
-
-  <form method="post" data-offline="add-patient">
-    <?= csrf_field() ?>
-
-    <label for="full_name"><?= e(t('full_name')) ?></label>
-    <input id="full_name" name="full_name" value="<?= e($old['full_name']) ?>" maxlength="120" required>
-
-    <div class="fgrid">
-      <div class="fld">
-        <label for="phone"><?= e(t('phone')) ?> (optional)</label>
-        <input id="phone" name="phone" inputmode="tel" pattern="\+?[0-9]{9,15}" value="<?= e($old['phone']) ?>">
+<form method="post" class="card" data-offline="add-patient">
+  <?= csrf_field() ?>
+  <?php if ($err): ?><div class="card__b"><div class="msg err" role="alert"><?= icon('alert') ?><span><?= e($err) ?></span></div></div><?php endif; ?>
+  <div class="fsec">
+    <div class="fsec__d"><h3>Patient</h3><p>A patient number is issued on saving.</p></div>
+    <div class="fsec__f">
+      <div class="field">
+        <label for="full_name">Full name</label>
+        <input id="full_name" name="full_name" value="<?= e($old['full_name']) ?>" maxlength="120" required autofocus>
       </div>
-      <div class="fld">
-        <label for="dob"><?= e(t('dob')) ?></label>
-        <input id="dob" name="dob" type="date" max="<?= e(today()) ?>" value="<?= e($old['dob']) ?>">
-      </div>
-    </div>
-
-    <div class="fgrid">
-      <div class="fld">
-        <label for="sex"><?= e(t('sex')) ?></label>
-        <select id="sex" name="sex">
-          <option value="">--</option>
-          <option value="F"<?= $old['sex'] === 'F' ? ' selected' : '' ?>><?= e(t('female')) ?></option>
-          <option value="M"<?= $old['sex'] === 'M' ? ' selected' : '' ?>><?= e(t('male')) ?></option>
-        </select>
-      </div>
-      <div class="fld">
-        <label for="village"><?= e(t('village')) ?></label>
-        <input id="village" name="village" value="<?= e($old['village']) ?>" maxlength="100">
+      <div class="fgrid fgrid--3">
+        <div class="field">
+          <label for="sex">Sex</label>
+          <select id="sex" name="sex">
+            <option value="">&mdash;</option>
+            <option value="F"<?= $old['sex'] === 'F' ? ' selected' : '' ?>>Female</option>
+            <option value="M"<?= $old['sex'] === 'M' ? ' selected' : '' ?>>Male</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="dob">Date of birth</label>
+          <input id="dob" name="dob" type="date" max="<?= e(today()) ?>" value="<?= e($old['dob']) ?>">
+        </div>
+        <div class="field">
+          <label for="village">Village</label>
+          <input id="village" name="village" value="<?= e($old['village']) ?>" maxlength="100">
+        </div>
       </div>
     </div>
-
-    <button type="submit"><?= icon('save') ?><?= e(t('save')) ?></button>
-  </form>
-</div>
+  </div>
+  <div class="fsec">
+    <div class="fsec__d"><h3>Contact</h3><p>Leave empty if the patient has no phone.</p></div>
+    <div class="fsec__f">
+      <div class="field">
+        <label for="phone">Phone number <span class="opt">(optional)</span></label>
+        <input id="phone" name="phone" inputmode="tel" value="<?= e($old['phone']) ?>" placeholder="097 123 4567">
+      </div>
+    </div>
+  </div>
+  <div class="card__f">
+    <a class="btn btn--ghost" href="<?= e(url('/health/patients.php')) ?>">Cancel</a>
+    <button type="submit"><?= icon('save') ?>Save and create request</button>
+  </div>
+</form>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

@@ -14,7 +14,7 @@ centre with its own health workers and doctors.
 | Roles | patient, health worker, doctor, administrator |
 | Database | MySQL, six entities, PDO prepared statements throughout |
 | Passwords | Argon2id (bcrypt fallback) |
-| Page weight | 13-23 KB per page including CSS and JS, against a 250 KB budget |
+| Page weight | 46-74 KB per application page including CSS and JS, against a 250 KB budget |
 | Offline | form drafts and queued submissions in `localStorage` |
 | Interface | English, mobile-first, modern responsive medical UI |
 
@@ -102,8 +102,8 @@ The health worker and the doctor both belong to **Lufwanyama Rural Health
 Centre**, and the patient is on that centre's register, so the full
 request-and-respond flow works straight away.
 
-**Change these passwords before the system is used for real** (Staff accounts
-&rarr; *Reset a password*). `tools/install.php` on an empty database creates
+**Change these passwords before the system is used for real** (**Staff** &rarr; open
+the person &rarr; *Reset password*, or **My account** for your own). `tools/install.php` on an empty database creates
 only the administrator. There are no demo patients or appointments.
 **No real patient data is used anywhere.**
 
@@ -113,16 +113,19 @@ only the administrator. There are no demo patients or appointments.
 
 | # | Who | Do this | Expect |
 |---|---|---|---|
-| 1 | Health worker `0970000002` | Log in, **New appointment**: pick Agness Mwanza, (optionally) the doctor, department, a future date, reason and clinical notes | Row appears on the dashboard as Pending |
-| 2 | Doctor `0970000003` | Log in &rarr; the request is in the queue &rarr; **Respond**: Confirm, Reschedule or Decline with a note | Status changes; the note is recorded against them |
-| 3 | Doctor | **My schedule** | Confirmed visits grouped by day, printable, with Completed buttons |
-| 4 | Patient `0970000004` | Log in | The same status and response, and no other patient's rows |
-| 5 | Patient | **Book appointment** | A second request, booked by the patient themselves |
-| 6 | Administrator `0970000001` | **Reports**, then **Audit log** | Counts by status, department, centre and doctor; every action logged with user, IP and time |
-| 7 | Administrator | **Staff accounts** | Add more health centres, health workers and doctors; reset a password |
+| 1 | Administrator `0970000001` | **Staff** &rarr; **Add staff member** | Doctors and health workers exist only because the administrator registers them; a one-time temporary password is shown to hand over |
+| 2 | Health worker `0970000002` | **New request**: pick Agness Mwanza, (optionally) the doctor, department, a date, reason and clinical notes | The request appears under **Requests** as Waiting on doctor |
+| 3 | Doctor `0970000003` | **Start reviewing** &rarr; Confirm, New date or Decline with a note | Saving opens the next waiting case; the reply is recorded against the doctor |
+| 4 | Health worker | **Overview** | The reply is listed under *Doctor replies to pass on* for patients without a phone |
+| 5 | Patient `0970000004` | Log in | The next visit says plainly whether to travel; no other patient's rows |
+| 6 | Patient | **Request appointment** | Only doctors at the chosen centre can be picked |
+| 7 | Administrator | **Overview**, **Audit log** | *Needs attention* (overdue replies, centres missing staff), counts by status, department, centre and doctor; every action logged |
+
+In development the login page lists the four demo accounts and fills them in
+with one click; it only lists an account whose documented password works.
 
 A patient who registers themselves belongs to no centre until a health worker
-attaches them: **Patients** &rarr; *Attach a patient who registered themselves*
+attaches them: **Patients** &rarr; *Patient registered on their own?*
 &rarr; enter their patient number. The move is written to the audit log.
 
 ---
@@ -261,12 +264,12 @@ start.bat  stop.bat                              one-click run / stop on Windows
 config/      db.php, config.sample.php           connection and environment
 includes/    init.php, functions.php, lang.php,  session, security headers, helpers,
              header.php, footer.php              interface labels, shared layout
-assets/      css/style.css, js/app.js            ~5 KB of CSS, ~6 KB of JS
+assets/      css/style.css, js/app.js            ~32 KB of CSS, ~9 KB of JS
 patient/     dashboard.php, book.php             FR5 plus self-booking (FR2)
 health/      dashboard.php, patients.php,        FR2, FR3
              add_patient.php, new_appointment.php
 doctor/      dashboard.php, schedule.php         FR4
-admin/       dashboard.php, users.php, audit.php FR1, FR6
+admin/       dashboard, staff, staff_new, staff_edit, centres, patients, audit   FR1, FR6
 tools/       install.php, demo_accounts.php,     installer; one account per role;
              selftest.php, offline_test.mjs      73 PHP checks; 37 JavaScript checks
 docs/        DATABASE.md, DEPLOYMENT.md, TESTING.md

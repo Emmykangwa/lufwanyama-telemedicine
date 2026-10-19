@@ -56,20 +56,22 @@ uncompressed, with the cache disabled so CSS and JS count every time:
 
 | Page | HTML | + CSS and JS |
 |---|---|---|
-| `login.php` | 1.8 KB | 13.0 KB |
-| `index.php` | 2.1 KB | 13.3 KB |
-| `patient/dashboard.php` | 3.3 KB | 14.5 KB |
-| `health/new_appointment.php` | 3.9 KB | 15.1 KB |
-| `admin/dashboard.php` (full report) | 4.3 KB | 15.4 KB |
-| `doctor/dashboard.php` (5 requests) | 8.5 KB | 19.7 KB |
-| `admin/audit.php` (200 log rows) | 9.4 KB | 20.6 KB |
-| `admin/users.php` (10 accounts) | 11.6 KB | 22.7 KB |
+| `login.php` | 4.9 KB | 45.8 KB |
+| `admin/staff.php` (staff directory) | 9.2 KB | 50.1 KB |
+| `health/new_appointment.php` | 9.0 KB | 49.9 KB |
+| `doctor/dashboard.php` (review queue, 20 per page) | 13.0 KB | 53.9 KB |
+| `patient/dashboard.php` | 21.3 KB | 62.2 KB |
+| `admin/audit.php` (50 rows per page) | 25.9 KB | 66.8 KB |
+| `admin/dashboard.php` (full report) | 29.4 KB | 70.3 KB |
+| `health/requests.php` (25 per page) | 32.8 KB | 73.7 KB |
+| `index.php` (landing page, with `landing.css`) | 36.6 KB | 94.6 KB |
 
-The heaviest page is **22.7 KB**, about a tenth of the budget. `style.css` is
-5.2 KB and `app.js` 5.9 KB, both cached after the first page, so later pages
-cost only their HTML. With gzip enabled (the `.htaccess` turns it on) every
-page lands between 5 and 8 KB. There are no web fonts, no images and no
-framework: the icons are emoji characters in the HTML.
+The heaviest application page is **73.7 KB**, under a third of the budget.
+`style.css` is 31.6 KB and `app.js` 9.3 KB, both cached after the first page, so
+later pages cost only their HTML. With gzip enabled (the `.htaccess` turns it on)
+an application page's HTML transfers in 2 to 5 KB. Every list that grows with
+clinic activity is paged. There are no web fonts, no images and no framework:
+icons and charts are inline SVG.
 
 ## 2. 2G and 3G conditions
 
@@ -82,7 +84,7 @@ framework: the icons are emoji characters in the HTML.
 
 **Draft test**
 
-1. Log in as health worker `0970000002`, open **New appointment**.
+1. Log in as health worker `0970000002`, open **New request**.
 2. Fill in half the form, including the clinical notes.
 3. Press **F5**.
 
@@ -136,23 +138,51 @@ inline links inside a sentence. Neither is a control a user has to hit.
 
 ## 5. Role-based access control
 
+Demo logins (`php tools/demo_accounts.php`; `--reset` restores these passwords):
+administrator `0970000001` / `Admin@2026`, health worker `0970000002` / `Health@2026`,
+doctor `0970000003` / `Doctor@2026`, patient `0970000004` / `Patient@2026`.
+In development the login page lists every demo account whose password still works.
+
 | Test | Do | Pass |
 |---|---|---|
-| Patient cannot reach admin | Log in as `0970000006`, open `/admin/dashboard.php` | `403 Access denied` |
+| Patient cannot reach admin | Log in as `0970000004`, open `/admin/dashboard.php` | `403 Access denied` |
 | Patient cannot reach the doctor queue | open `/doctor/dashboard.php` | `403 Access denied` |
-| Health worker cannot reach reports | log in as `0970000002`, open `/admin/dashboard.php` | `403 Access denied` |
+| Health worker cannot register staff | log in as `0970000002`, open `/admin/staff_new.php` | `403 Access denied` |
+| Doctor cannot reach the staff directory | log in as `0970000003`, open `/admin/staff.php` | `403 Access denied` |
+| Public registration creates patients only | open `/register.php` | no role choice on the form; the account is a patient |
 | Logged out, nothing is reachable | open `/patient/dashboard.php` in a private window | redirected to the login page |
 
-## 6. Data isolation
+## 6. Staff registration by the administrator (FR1)
+
+1. Log in as `0970000001`, open **Staff** &rarr; **Add staff member**.
+2. Choose **Doctor**, a name, phone `097 999 0001` and the health centre **Clinic**;
+   leave **Generate a temporary password** selected and save.
+
+**Pass:** the account page opens with a one-time panel showing the phone number and
+temporary password; reloading the page no longer shows the password; the new doctor
+can sign in with it and lands on the review queue for Clinic.
+
+3. Try to add another account with `+260 97 999 0001`.
+
+**Pass:** refused as a duplicate (numbers are stored in one canonical form).
+
+4. Try to add a health worker with no health centre.
+
+**Pass:** refused; only administrators may have no centre.
+
+## 7. Data isolation
+
+Do step 6 first and also add a health worker at **Clinic**, so a second centre
+has its own staff.
 
 | Test | Do | Pass |
 |---|---|---|
-| One patient cannot see another's rows | Log in as `0970000006`; the dashboard lists only her own appointments | no other patient's name appears |
-| Health workers are separated | Log in as `0970000003` (Centre B): **Patients** and the dashboard show Centre B only | no Centre A patient or request |
-| A doctor cannot answer another centre's request | While logged in as `0970000004` (Centre A), POST a `consultation_id` whose appointment is at Centre B | *That request is not yours to answer* and no row changes |
-| A doctor cannot answer another doctor's named request | POST a `consultation_id` for a request at Centre A addressed to a different named doctor | same refusal; the queue never listed it either |
-| Patient list is centre-scoped | As `0970000002`, **New appointment**: the patient drop-down holds Centre A patients only | Centre B patients absent |
-| Doctor list is centre-scoped | On the same form, only doctors who work at Centre A appear | Centre B doctors absent |
+| One patient cannot see another's rows | Log in as `0970000004`; the dashboard lists only her own appointments | no other patient's name appears |
+| Health workers are separated | Log in as the Clinic health worker: **Patients** and **Requests** show Clinic only | no Lufwanyama RHC patient or request |
+| A doctor cannot open another centre's case | As the Clinic doctor, open `/doctor/case.php?id=` with a consultation id from Lufwanyama RHC | *That request is not in your queue* and no row changes |
+| A doctor cannot answer another doctor's named request | Open a case at the same centre addressed to a different named doctor | same refusal; the queue never listed it either |
+| Patient list is centre-scoped | As `0970000002`, **New request**: the patient drop-down holds this centre's patients only | other centres' patients absent |
+| Doctor list is centre-scoped | As `0970000004`, **Request appointment**: pick a centre | only doctors who work there can be chosen |
 
 The doctor cases are the important ones: the `UPDATE` itself carries
 `AND facility_id = ? AND (doctor_id IS NULL OR doctor_id = ?)`, so a forged form
@@ -160,7 +190,7 @@ id cannot change another centre's or another doctor's appointment even if the
 read-side check were removed. `tools/selftest.php` section 6 proves this
 directly against the database.
 
-## 7. CSRF
+## 8. CSRF
 
 1. Log in as a health worker and open **New appointment**.
 2. In DevTools &rarr; Elements, delete the hidden `csrf` input (or change one
@@ -169,7 +199,7 @@ directly against the database.
 
 **Pass:** `Invalid or expired request.` and nothing is written.
 
-## 8. SQL injection
+## 9. SQL injection
 
 | Field | Input | Pass |
 |---|---|---|
@@ -181,7 +211,7 @@ directly against the database.
 Everything is a bound parameter with `PDO::ATTR_EMULATE_PREPARES => false`, so
 the input is sent separately from the statement and is never parsed as SQL.
 
-## 9. Output escaping (XSS)
+## 10. Output escaping (XSS)
 
 1. As a health worker, register a patient named
    `<script>alert(1)</script>Test`.
@@ -191,7 +221,7 @@ the input is sent separately from the statement and is never parsed as SQL.
 `view-source` shows `&lt;script&gt;`. The Content-Security-Policy would block an
 injected inline script even if an escape were missed.
 
-## 10. Password storage
+## 11. Password storage
 
 1. In phpMyAdmin run `SELECT phone, password_hash FROM users LIMIT 3;`
    (or `mysql -u root telemedicine -e "SELECT phone, password_hash FROM users LIMIT 3;"`)
@@ -205,7 +235,7 @@ Argon2). No readable password anywhere.
 **Pass:** the new password works, the old one does not, and a
 `RESET_PASSWORD` row appears in the audit log.
 
-## 11. Session handling
+## 12. Session handling
 
 | Test | Do | Pass |
 |---|---|---|
@@ -214,7 +244,7 @@ Argon2). No readable password anywhere.
 | Idle timeout | leave a session for 30 minutes, then click a link | returned to the login page with *Your session ended for safety* |
 | Logout | log out, then press Back | the protected page is not served |
 
-## 12. Login throttle
+## 13. Login throttle
 
 The throttle has two tiers, because a whole clinic usually shares one public
 address: **8 failures for one phone number or email** and **40 failures from one
@@ -231,7 +261,7 @@ password was right, and `LOGIN_BLOCKED` rows appear in the audit log.
 **Pass:** that account logs in normally. One account being attacked does not
 lock out the rest of the clinic.
 
-## 13. Audit trail (FR6)
+## 14. Audit trail (FR6)
 
 Log in as the administrator and open **Audit log**.
 
@@ -240,7 +270,7 @@ response, withdrawal, account change and export is listed with the user, their
 role, the record, the detail line, the IP address and the time. Filter by
 action or by name, then press **CSV** to download the filtered rows.
 
-## 14. Validation
+## 15. Validation
 
 | Field | Input | Expected message |
 |---|---|---|
@@ -253,7 +283,7 @@ action or by name, then press **CSV** to download the filtered rows.
 | Reschedule | no new date given | *To reschedule, pick a new date that is today or later* |
 | Duplicate phone | an already registered number | *already registered* |
 
-## 15. Transactions
+## 16. Transactions
 
 A new appointment writes an `appointments` row and a `consultations` row in one
 transaction. To see the rollback, temporarily rename the `consultations` table,
@@ -269,7 +299,7 @@ RENAME TABLE consultations_x TO consultations;   -- put it back
 `tools/selftest.php` section 11 also proves the rollback automatically, without
 touching the live tables.
 
-## 16. HTTPS behaviour (NFR1)
+## 17. HTTPS behaviour (NFR1)
 
 Localhost is exempt so development needs no certificate. On any other host
 `includes/init.php` sends a 301 to `https://`, marks the session cookie
@@ -277,7 +307,7 @@ Localhost is exempt so development needs no certificate. On any other host
 without a server, set a host name other than `localhost` in your hosts file and
 open the site over `http://`.
 
-## 17. Responsive interface and motion
+## 18. Responsive interface and motion
 
 Resize the window from a phone width (360 px) up to desktop.
 

@@ -18,7 +18,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     csrf_check();
 
     $old['full_name'] = clean('full_name', 120);
-    $old['phone']     = str_replace(' ', '', clean('phone', 20));
+    $old['phone']     = normalize_phone(clean('phone', 20));
     $old['email']     = strtolower(clean('email', 120));
     $old['dob']       = clean('dob', 10);
     $old['sex']       = clean('sex', 1);
@@ -71,7 +71,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
             $pdo->commit();
 
-            flash('ok', 'Account created. Your patient number is ' . $pno . '. Please log in.');
+            flash('ok', 'Account created. Your patient number is ' . $pno . '. Sign in with your phone number.');
             redirect('/login.php');
         } catch (PDOException $ex) {
             if ($pdo->inTransaction()) {
@@ -87,48 +87,72 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$page_title = t('register');
+$page_title = 'Create a patient account';
 require __DIR__ . '/includes/header.php';
 ?>
 <div class="auth">
-  <div class="auth__head">
-    <span class="brand__mark"><?= icon('cross') ?></span>
-    <h1><?= e(t('register')) ?></h1>
-    <p class="hint">Patients register themselves here. Staff accounts are created by the administrator.</p>
-  </div>
-  <div class="card">
-  <?php if ($err): ?><div class="msg err"><?= e($err) ?></div><?php endif; ?>
+  <aside class="auth__aside">
+    <h2>Request an appointment without leaving your village.</h2>
+    <ul class="auth__list">
+      <li><?= icon('calendar') ?><div><b>Choose a centre and a date</b>A doctor at the health centre answers your request.</div></li>
+      <li><?= icon('bell') ?><div><b>Follow the reply</b>Confirmed, a new date, or advice &mdash; before you spend on transport.</div></li>
+      <li><?= icon('shield') ?><div><b>Your record stays private</b>Only you and the clinical staff caring for you can see it.</div></li>
+    </ul>
+    <p class="auth__foot">This form is for patients. Doctors and health workers are registered by the district administrator.</p>
+  </aside>
 
-  <form method="post" data-offline="register" autocomplete="on">
-    <?= csrf_field() ?>
+  <div class="auth__main">
+    <h1>Create a patient account</h1>
+    <p class="muted">Already registered? <a href="<?= e(url('/login.php')) ?>">Sign in</a>.</p>
 
-    <label for="full_name"><?= e(t('full_name')) ?></label>
-    <input id="full_name" name="full_name" value="<?= e($old['full_name']) ?>" maxlength="120" required autocomplete="name">
+    <?php if ($err): ?><div class="msg err" role="alert"><?= icon('alert') ?><span><?= e($err) ?></span></div><?php endif; ?>
 
-    <label for="phone"><?= e(t('phone')) ?></label>
-    <input id="phone" name="phone" inputmode="tel" pattern="\+?[0-9]{9,15}" value="<?= e($old['phone']) ?>" required autocomplete="tel">
+    <form method="post" data-offline="register" autocomplete="on">
+      <?= csrf_field() ?>
 
-    <label for="email"><?= e(t('email')) ?></label>
-    <input id="email" name="email" type="email" value="<?= e($old['email']) ?>" maxlength="120" autocomplete="email">
+      <div class="field">
+        <label for="full_name">Full name</label>
+        <input id="full_name" name="full_name" value="<?= e($old['full_name']) ?>" maxlength="120" required autocomplete="name">
+      </div>
 
-    <label for="dob"><?= e(t('dob')) ?></label>
-    <input id="dob" name="dob" type="date" max="<?= e(today()) ?>" value="<?= e($old['dob']) ?>">
+      <div class="fgrid">
+        <div class="field">
+          <label for="phone">Phone number</label>
+          <input id="phone" name="phone" inputmode="tel" value="<?= e($old['phone']) ?>" required autocomplete="tel" placeholder="097 123 4567">
+        </div>
+        <div class="field">
+          <label for="email">Email <span class="opt">(optional)</span></label>
+          <input id="email" name="email" type="email" value="<?= e($old['email']) ?>" maxlength="120" autocomplete="email">
+        </div>
+      </div>
 
-    <label for="sex"><?= e(t('sex')) ?></label>
-    <select id="sex" name="sex">
-      <option value="">--</option>
-      <option value="F"<?= $old['sex'] === 'F' ? ' selected' : '' ?>><?= e(t('female')) ?></option>
-      <option value="M"<?= $old['sex'] === 'M' ? ' selected' : '' ?>><?= e(t('male')) ?></option>
-    </select>
+      <div class="fgrid fgrid--3">
+        <div class="field">
+          <label for="dob">Date of birth</label>
+          <input id="dob" name="dob" type="date" max="<?= e(today()) ?>" value="<?= e($old['dob']) ?>">
+        </div>
+        <div class="field">
+          <label for="sex">Sex</label>
+          <select id="sex" name="sex">
+            <option value="">&mdash;</option>
+            <option value="F"<?= $old['sex'] === 'F' ? ' selected' : '' ?>>Female</option>
+            <option value="M"<?= $old['sex'] === 'M' ? ' selected' : '' ?>>Male</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="village">Village</label>
+          <input id="village" name="village" value="<?= e($old['village']) ?>" maxlength="100">
+        </div>
+      </div>
 
-    <label for="village"><?= e(t('village')) ?></label>
-    <input id="village" name="village" value="<?= e($old['village']) ?>" maxlength="100">
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" minlength="8" required autocomplete="new-password">
+        <p class="hint">At least 8 characters. Mix letters, numbers or symbols.</p>
+      </div>
 
-    <label for="password"><?= e(t('password')) ?> (at least 8 characters)</label>
-    <input id="password" name="password" type="password" minlength="8" required autocomplete="new-password">
-
-    <button type="submit"><?= icon('check') ?><?= e(t('register')) ?></button>
-  </form>
+      <button type="submit" class="btn--block"><?= icon('check') ?>Create account</button>
+    </form>
   </div>
 </div>
 <?php require __DIR__ . '/includes/footer.php'; ?>

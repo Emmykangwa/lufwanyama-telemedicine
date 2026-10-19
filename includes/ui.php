@@ -93,7 +93,7 @@ function metric(string $label, string $value, string $unit, string $chart, strin
 function bar_chart(array $rows, string $aria, int $ticks = 3): string
 {
     if (!$rows) {
-        return '<p class="hint">' . e(t('no_records')) . '</p>';
+        return empty_state('No appointments in this window.');
     }
     $vals = array_map('floatval', array_values($rows));
     $keys = array_keys($rows);
@@ -102,15 +102,15 @@ function bar_chart(array $rows, string $aria, int $ticks = 3): string
     $step = max(1, (int)ceil($max / max(1, $ticks)));
     $top  = max(1, $step * $ticks);
 
-    $w = 720.0; $h = 210.0; $padL = 30.0; $padB = 22.0;
-    $plotW = $w - $padL; $plotH = $h - $padB;
+    $w = 720.0; $h = 210.0; $padL = 30.0; $padB = 22.0; $padT = 10.0;
+    $plotW = $w - $padL; $plotH = $h - $padB - $padT;
     $n = count($vals);
     $slot = $plotW / $n;
     $bw = min(16.0, max(3.0, $slot * 0.55));
 
     $grid = ''; $axis = '';
     for ($i = 0; $i <= $ticks; $i++) {
-        $y = round($plotH - ($i / $ticks) * $plotH, 1);
+        $y = round($padT + $plotH - ($i / $ticks) * $plotH, 1);
         $grid .= '<line x1="' . $padL . '" y1="' . $y . '" x2="' . $w . '" y2="' . $y . '" '
                . 'stroke="currentColor" stroke-width="1" class="ch-grid"/>';
         $axis .= '<text x="' . ($padL - 7) . '" y="' . ($y + 3.5) . '" text-anchor="end" '
@@ -122,10 +122,10 @@ function bar_chart(array $rows, string $aria, int $ticks = 3): string
         $bh = $top > 0 ? ($v / $top) * $plotH : 0.0;
         $bh = max($v > 0 ? 2.0 : 0.0, $bh);
         $x  = round($padL + $i * $slot + ($slot - $bw) / 2, 2);
-        $y  = round($plotH - $bh, 2);
+        $y  = round($padT + $plotH - $bh, 2);
         if ($bh > 0) {
             $bars .= '<rect x="' . $x . '" y="' . $y . '" width="' . round($bw, 2) . '" '
-                   . 'height="' . round($bh, 2) . '" rx="2.5" class="ch-bar"><title>'
+                   . 'height="' . round($bh, 2) . '" rx="2" class="ch-bar"><title>'
                    . e((string)$keys[$i]) . ': ' . (int)$v . '</title></rect>';
         }
         // only label a few columns, otherwise they collide
@@ -142,12 +142,13 @@ function bar_chart(array $rows, string $aria, int $ticks = 3): string
 
 /**
  * A ranked horizontal breakdown: label, proportional track, count.
- * Replaces a plain two-column table where the comparison is the point.
+ * The track is SVG rather than a styled element because the
+ * Content-Security-Policy refuses inline style attributes.
  */
 function rank_bars(array $rows, string $keyField = 'k', string $valField = 'c'): string
 {
     if (!$rows) {
-        return '<p class="hint">' . e(t('no_records')) . '</p>';
+        return empty_state('No data in this window.');
     }
     $max = 0;
     foreach ($rows as $r) {
@@ -158,9 +159,12 @@ function rank_bars(array $rows, string $keyField = 'k', string $valField = 'c'):
     $out = '<ul class="ranks">';
     foreach ($rows as $r) {
         $v   = (int)$r[$valField];
-        $pct = round(($v / $max) * 100);
-        $out .= '<li><span class="ranks__k">' . e((string)$r[$keyField]) . '</span>'
-              . '<span class="ranks__t"><i style="width:' . $pct . '%"></i></span>'
+        $pct = round(($v / $max) * 100, 1);
+        $out .= '<li><span class="ranks__k" title="' . e((string)$r[$keyField]) . '">' . e((string)$r[$keyField]) . '</span>'
+              . '<svg class="ranks__t" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">'
+              . '<rect width="100" height="6" rx="3" class="ranks__bg"/>'
+              . ($v > 0 ? '<rect width="' . max(1.5, $pct) . '" height="6" rx="3" class="ranks__fg"/>' : '')
+              . '</svg>'
               . '<b class="ranks__v">' . $v . '</b></li>';
     }
     return $out . '</ul>';
@@ -177,21 +181,27 @@ function status_split(array $rows): string
         $total += (int)$r['c'];
     }
     if ($total === 0) {
-        return '<p class="hint">' . e(t('no_records')) . '</p>';
+        return empty_state('Nothing to break down yet.');
     }
 
-    $track = '<div class="split" role="img" aria-label="Appointment status split">';
+    $x     = 0.0;
+    $rects = '';
     $key   = '<ul class="split__key">';
     foreach ($rows as $r) {
-        $st  = (string)$r['k'];
+        $st  = in_array((string)$r['k'], statuses(), true) ? (string)$r['k'] : 'pending';
         $v   = (int)$r['c'];
-        $pct = round(($v / $total) * 100, 1);
-        $track .= '<i class="s-' . e($st) . '" style="width:' . $pct . '%" title="'
-                . e(t($st)) . ': ' . $v . '"></i>';
-        $key   .= '<li><span class="dot s-' . e($st) . '"></span>' . e(t($st))
-                . ' <b>' . $v . '</b> <small>' . $pct . '%</small></li>';
+        if ($v === 0) {
+            continue;
+        }
+        $pct = ($v / $total) * 100;
+        $rects .= '<rect x="' . round($x, 2) . '" width="' . round($pct, 2) . '" height="8" class="f-' . $st . '">'
+                . '<title>' . e(t($st)) . ': ' . $v . '</title></rect>';
+        $x += $pct;
+        $key .= '<li><span class="dot s-' . $st . '"></span>' . e(t($st))
+              . ' <b>' . $v . '</b> <small>' . round($pct) . '%</small></li>';
     }
-    return $track . '</div>' . $key . '</ul>';
+    return '<svg class="split" viewBox="0 0 100 8" preserveAspectRatio="none" role="img" '
+         . 'aria-label="Appointment status split">' . $rects . '</svg>' . $key . '</ul>';
 }
 
 /**
@@ -225,7 +235,12 @@ function mini_cal(string $monthStart, array $marked, string $heading = ''): stri
         if ($iso === $today) {
             $cls .= ' today';
         }
-        $out .= '<span class="' . $cls . '">' . $d . '</span>';
+        $title = isset($marked[$iso]) ? ' title="' . e(t((string)$marked[$iso])) . '"' : '';
+        $out .= '<span class="' . $cls . '"' . $title . '>' . $d . '</span>';
+    }
+    $out .= '</div><div class="cal__legend">';
+    foreach (['pending', 'confirmed', 'rescheduled', 'completed', 'declined'] as $s) {
+        $out .= '<span><i class="dot s-' . $s . '"></i>' . e(t($s)) . '</span>';
     }
     return $out . '</div></div>';
 }
@@ -234,7 +249,7 @@ function mini_cal(string $monthStart, array $marked, string $heading = ''): stri
 function timeline(array $items): string
 {
     if (!$items) {
-        return '<p class="hint">' . e(t('no_records')) . '</p>';
+        return empty_state('No activity yet.');
     }
     $out = '<ol class="tl">';
     foreach ($items as [$when, $title, $meta, $status]) {
@@ -297,4 +312,66 @@ function pager(int $page, int $pages, array $keep = [], string $param = 'p'): st
         ? '<a class="pager__b" href="' . $link($page + 1) . '" rel="next">Next</a>'
         : '<span class="pager__b is-off">Next</span>';
     return $out . '</nav>';
+}
+
+/**
+ * A row of tabs for switching a list between views. $items maps a value to
+ * [label, count|null]; '' is the "all" view. $keep carries other filters.
+ */
+function tabs(array $items, string $current, string $param = 'view', array $keep = []): string
+{
+    $out = '<nav class="tabs" aria-label="Views">';
+    foreach ($items as $value => [$label, $count]) {
+        $q = $keep;
+        if ($value !== '') {
+            $q[$param] = $value;
+        } else {
+            unset($q[$param]);
+        }
+        $href = '?' . http_build_query($q);
+        $on   = (string)$value === $current;
+        $out .= '<a href="' . e($href === '?' ? '?' : $href) . '"' . ($on ? ' class="on" aria-current="page"' : '') . '>'
+              . e($label) . ($count !== null ? '<span class="tabs__n">' . (int)$count . '</span>' : '') . '</a>';
+    }
+    return $out . '</nav>';
+}
+
+/** A quiet message for an empty list, optionally with a next step. */
+function empty_state(string $text, string $action = '', string $ico = 'inbox'): string
+{
+    return '<div class="empty">' . icon($ico) . '<p>' . e($text) . '</p>'
+         . ($action !== '' ? '<div>' . $action . '</div>' : '') . '</div>';
+}
+
+/** A definition list of label => value pairs; values are already-escaped HTML. */
+function kv(array $pairs): string
+{
+    $out = '<dl class="kv">';
+    foreach ($pairs as $k => $v) {
+        if ($v === null || $v === '') {
+            $v = '<span class="muted">&mdash;</span>';
+        }
+        $out .= '<div><dt>' . e((string)$k) . '</dt><dd>' . $v . '</dd></div>';
+    }
+    return $out . '</dl>';
+}
+
+/** Small avatar with initials. */
+function avatar(string $name, string $class = 'av'): string
+{
+    return '<span class="' . e($class) . '" aria-hidden="true">' . e(initials($name)) . '</span>';
+}
+
+/** Active / Inactive pill. */
+function state_pill(bool $active): string
+{
+    return $active
+        ? '<span class="pill pill--ok">Active</span>'
+        : '<span class="pill pill--off">Inactive</span>';
+}
+
+/** Role tag. */
+function role_tag(string $role): string
+{
+    return '<span class="tag tag--' . e($role) . '">' . e(role_label($role)) . '</span>';
 }

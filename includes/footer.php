@@ -1,22 +1,17 @@
 <?php $u = current_user(); ?>
-</main>
 <?php if ($u): ?>
-    <footer class="site-footer noprint">
-      <div class="site-footer__bar">
-        <span>&copy; <?= date('Y') ?> Lufwanyama District Telemedicine</span>
-        <span>Built for rural connectivity &middot; your data stays private</span>
-      </div>
+    </main>
+    <footer class="foot noprint">
+      <span>&copy; <?= date('Y') ?> Lufwanyama District Telemedicine</span>
+      <span>Signed in as <?= e($u['full_name']) ?> &middot; <a href="<?= e(url('/logout.php')) ?>">Sign out</a></span>
     </footer>
   </div>
 </div>
 <?php else: ?>
-<footer class="site-footer noprint">
-  <div class="pub">
-    <div class="site-footer__bar">
-      <span>&copy; <?= date('Y') ?> Lufwanyama District Telemedicine</span>
-      <span>Built for rural connectivity &middot; your data stays private</span>
-    </div>
-  </div>
+</main>
+<footer class="foot foot--pub noprint">
+  <span>&copy; <?= date('Y') ?> Lufwanyama District Telemedicine</span>
+  <span>Built for rural connectivity &middot; your data stays private</span>
 </footer>
 <?php endif; ?>
 

@@ -134,7 +134,7 @@ VALUES ('District Administrator', '0970000000', '<paste the hash>', 'admin');
 is empty, but it uses a known default password, so on a live server prefer the
 manual INSERT above with your own password.)
 
-Log in as that account, then from **Staff accounts**:
+Log in as that account, then from **Health centres** and **Staff**:
 
 1. Rename the two starter health centres to the real ones, and add the rest.
 2. Create the health worker and doctor accounts (both belong to a centre).

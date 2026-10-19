@@ -2,11 +2,14 @@
 /**
  * tools/demo_accounts.php -- create one working account for each role.
  *
- *   php tools/demo_accounts.php
+ *   php tools/demo_accounts.php           create any demo account that is missing
+ *   php tools/demo_accounts.php --reset   also restore the documented password
+ *                                         (and reactivate) accounts that exist
  *
  * Creates a health centre and one administrator, health worker, doctor and
  * patient so every part of the system can be opened and demonstrated. It is
- * safe to run twice: an account whose phone number already exists is skipped.
+ * safe to run twice: an account whose phone number already exists is kept,
+ * and with --reset its password goes back to the one printed below.
  *
  * These are development logins with known passwords. Do NOT run this on a
  * live server -- see docs/DEPLOYMENT.md for creating the real first account.
@@ -23,6 +26,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 const CENTRE = 'Lufwanyama Rural Health Centre';
+$reset = in_array('--reset', $argv, true);
 
 // ---- the health centre both staff accounts belong to --------------------
 $st = $pdo->prepare('SELECT facility_id FROM facilities WHERE name = ?');
@@ -52,8 +56,12 @@ foreach ($accounts as [$name, $phone, $plain, $role, $fid]) {
     $st->execute([$phone]);
     $userId = (int)$st->fetchColumn();
 
-    if ($userId) {
-        echo sprintf("  %-14s %s  already exists, skipped\n", $role, $phone);
+    if ($userId && $reset) {
+        $pdo->prepare('UPDATE users SET password_hash = ?, is_active = 1 WHERE user_id = ?')
+            ->execute([hash_password($plain), $userId]);
+        echo sprintf("  %-14s %s  password restored\n", $role, $phone);
+    } elseif ($userId) {
+        echo sprintf("  %-14s %s  already exists, kept (--reset restores its password)\n", $role, $phone);
     } else {
         $pdo->prepare(
             'INSERT INTO users (facility_id, full_name, phone, password_hash, role, is_active)

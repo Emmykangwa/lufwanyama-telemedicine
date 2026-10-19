@@ -10,14 +10,17 @@
  */
 require_once __DIR__ . '/../includes/init.php';
 $me = require_role(['health_worker']);
+$fac = (int)$me['facility_id'];
 
 $err = '';
-
+$lookup = '';
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     csrf_check();
-    $lookup = str_replace(' ', '', clean('lookup', 30));
+    $lookup = clean('lookup', 30);
+    $key    = str_replace(' ', '', $lookup);
+    $phone  = normalize_phone($lookup);
 
-    if ($lookup === '') {
+    if ($key === '') {
         $err = 'Enter the patient number or phone number.';
     } else {
         $st = $pdo->prepare(
@@ -26,101 +29,110 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
               WHERE (upper(patient_number) = upper(?) OR phone = ?)
               LIMIT 1'
         );
-        $st->execute([$lookup, $lookup]);
+        $st->execute([$key, $phone]);
         $found = $st->fetch();
 
         if (!$found) {
-            $err = 'No patient found with that number.';
-        } elseif ($found['facility_id'] !== null && (int)$found['facility_id'] === (int)$me['facility_id']) {
-            $err = $found['full_name'] . ' is already registered at this facility.';
+            $err = 'No patient has that number. Check it with the patient, or register them.';
+        } elseif ($found['facility_id'] !== null && (int)$found['facility_id'] === $fac) {
+            $err = $found['full_name'] . ' is already on this register.';
         } elseif ($found['facility_id'] !== null) {
             // Belongs to another clinic: do not disclose which one.
-            $err = 'That patient is registered at another facility. Ask the administrator to move them.';
+            $err = 'That patient is registered at another health centre. The district administrator can move them.';
         } else {
             $pdo->prepare('UPDATE patients SET facility_id = ? WHERE patient_id = ?')
-                ->execute([$me['facility_id'], $found['patient_id']]);
-            audit($pdo, 'LINK', 'patient', (int)$found['patient_id'],
-                'Attached to facility ' . $me['facility_id']);
-            flash('ok', $found['full_name'] . ' (' . $found['patient_number'] . ') is now on this facility register.');
-            redirect('/health/patients.php');
+                ->execute([$fac, $found['patient_id']]);
+            audit($pdo, 'LINK', 'patient', (int)$found['patient_id'], 'Attached to facility ' . $fac);
+            flash('ok', $found['full_name'] . ' (' . $found['patient_number'] . ') is now on this register.');
+            redirect('/health/patient.php?id=' . (int)$found['patient_id']);
         }
     }
 }
 
-$q    = trim((string)($_GET['q'] ?? ''));
-$sql  = "SELECT p.patient_id, p.patient_number, p.full_name, p.sex, p.dob, p.phone, p.village,
-                (p.user_id IS NOT NULL) AS has_login,
-                (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.patient_id) AS visits
-           FROM patients p
-          WHERE p.facility_id = ?";
-$args = [$me['facility_id']];
+$q    = clean_get('q', 60);
+$where = 'p.facility_id = ?';
+$args  = [$fac];
 if ($q !== '') {
     // The default utf8mb4_unicode_ci collation already makes LIKE case-insensitive.
-    $sql   .= ' AND (p.full_name LIKE ? OR p.patient_number LIKE ? OR p.phone LIKE ?)';
-    $args[] = '%' . $q . '%';
-    $args[] = '%' . $q . '%';
-    $args[] = '%' . $q . '%';
+    $where .= ' AND (p.full_name LIKE ? OR p.patient_number LIKE ? OR p.phone LIKE ? OR p.village LIKE ?)';
+    array_push($args, "%$q%", "%$q%", "%$q%", "%$q%");
 }
-$sql .= ' ORDER BY p.full_name LIMIT 200';
+$st = $pdo->prepare("SELECT COUNT(*) FROM patients p WHERE $where");
+$st->execute($args);
+$found = (int)$st->fetchColumn();
+$per   = 25;
+$pages = max(1, (int)ceil($found / $per));
+$page  = min(max(1, (int)($_GET['p'] ?? 1)), $pages);
 
-$st = $pdo->prepare($sql);
+$st = $pdo->prepare(
+    "SELECT p.patient_id, p.patient_number, p.full_name, p.sex, p.dob, p.phone, p.village,
+            (p.user_id IS NOT NULL) AS has_login,
+            (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.patient_id) AS visits,
+            (SELECT a.status FROM appointments a WHERE a.patient_id = p.patient_id
+              ORDER BY a.appointment_date DESC, a.appointment_id DESC LIMIT 1) AS last_status,
+            (SELECT MAX(a.appointment_date) FROM appointments a WHERE a.patient_id = p.patient_id) AS last_date
+       FROM patients p
+      WHERE $where
+   ORDER BY p.full_name
+      LIMIT $per OFFSET " . (($page - 1) * $per)
+);
 $st->execute($args);
 $rows = $st->fetchAll();
 
-$page_title = t('patients');
+$page_title   = 'Patients';
+$page_sub     = $found . ' on the ' . e((string)$me['facility']) . ' register';
+$page_actions = '<a class="btn" href="' . e(url('/health/add_patient.php')) . '">' . icon('userplus') . 'Register patient</a>';
 require __DIR__ . '/../includes/header.php';
 ?>
-<p class="actions noprint">
-  <a class="btn" href="<?= e(url('/health/add_patient.php')) ?>"><?= icon('userplus') ?><?= e(t('add_patient')) ?></a>
-  <a class="btn alt" href="<?= e(url('/health/new_appointment.php')) ?>"><?= icon('send') ?><?= e(t('new_appointment')) ?></a>
-</p>
-
-<div class="card noprint">
-  <h2><?= e(t('search')) ?></h2>
-  <form method="get" class="row">
-    <div>
-      <label for="q">Name, patient number or phone</label>
-      <input id="q" name="q" value="<?= e($q) ?>" maxlength="60">
+<div class="grid grid-main">
+<section class="card">
+  <form method="get" class="toolbar">
+    <div class="search grow"><?= icon('search') ?>
+      <input name="q" value="<?= e($q) ?>" placeholder="Search name, patient number, phone or village" aria-label="Search patients" maxlength="60" autofocus>
     </div>
-    <div><button type="submit"><?= e(t('search')) ?></button></div>
+    <button type="submit" class="btn--ghost">Search</button>
+<?php if ($q !== ''): ?><a class="btn btn--link" href="<?= e(url('/health/patients.php')) ?>">Clear</a><?php endif; ?>
   </form>
-</div>
 
-<div class="card noprint">
-  <h2>Attach a patient who registered themselves</h2>
-  <p class="hint">Ask the patient for the number they received when they registered.</p>
-  <?php if ($err): ?><div class="msg err"><?= icon('alert') ?><span><?= e($err) ?></span></div><?php endif; ?>
-  <form method="post" class="row">
-    <?= csrf_field() ?>
-    <div>
-      <label for="lookup">Patient number or phone number</label>
-      <input id="lookup" name="lookup" placeholder="LUF-26-01234" maxlength="30" required>
-    </div>
-    <div><button type="submit" class="alt">Attach</button></div>
-  </form>
-</div>
-
-<div class="scroll">
-<table>
-  <caption><?= count($rows) ?> patient(s) on this facility register (first 200).</caption>
-  <tr>
-    <th><?= e(t('patient')) ?></th><th><?= e(t('sex')) ?></th><th><?= e(t('dob')) ?></th>
-    <th><?= e(t('phone')) ?></th><th><?= e(t('village')) ?></th><th>Appointments</th><th></th>
-  </tr>
 <?php if (!$rows): ?>
-  <tr><td colspan="7"><?= e(t('no_records')) ?></td></tr>
-<?php endif; ?>
-<?php foreach ($rows as $r): ?>
-  <tr>
-    <td><?= e($r['full_name']) ?><br><small><?= e($r['patient_number']) ?><?= $r['has_login'] ? ' &middot; has login' : '' ?></small></td>
-    <td><?= e($r['sex']) ?></td>
-    <td><?= e($r['dob']) ?></td>
-    <td><?= e($r['phone']) ?></td>
-    <td><?= e($r['village']) ?></td>
-    <td><?= (int)$r['visits'] ?></td>
-    <td><a class="btn alt mini" href="<?= e(url('/health/new_appointment.php?patient_id=' . (int)$r['patient_id'])) ?>">Book</a></td>
-  </tr>
+  <?= empty_state($q !== '' ? 'Nobody on this register matches “' . $q . '”.' : 'No patients on this register yet.',
+        '<a class="btn btn--sm" href="' . e(url('/health/add_patient.php')) . '">' . icon('userplus') . 'Register patient</a>', 'users') ?>
+<?php else: ?>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Patient</th><th class="hide-sm">Sex / age</th><th class="hide-sm">Village</th><th>Last request</th><th class="act"></th></tr></thead>
+    <tbody>
+<?php foreach ($rows as $r): $age = age_from($r['dob']); ?>
+    <tr>
+      <td><div class="who"><?= avatar($r['full_name']) ?><div>
+        <a class="rowlink" href="<?= e(url('/health/patient.php?id=' . (int)$r['patient_id'])) ?>"><?= e($r['full_name']) ?></a>
+        <small class="mono"><?= e($r['patient_number']) ?><?= $r['phone'] ? ' · ' . e($r['phone']) : '' ?></small></div></div></td>
+      <td class="hide-sm"><?= e($r['sex'] ?? '—') ?><?= $age !== null ? ' · ' . $age . ' y' : '' ?></td>
+      <td class="hide-sm"><?= e($r['village'] ?: '—') ?></td>
+      <td><?= $r['last_status'] ? badge((string)$r['last_status']) . '<small>' . e(fmt_date($r['last_date'])) . ' · ' . (int)$r['visits'] . ' total</small>' : '<span class="muted">None yet</span>' ?></td>
+      <td class="act"><a class="btn btn--ghost btn--sm" href="<?= e(url('/health/new_appointment.php?patient_id=' . (int)$r['patient_id'])) ?>"><?= icon('send') ?>Request</a></td>
+    </tr>
 <?php endforeach; ?>
-</table>
+    </tbody>
+  </table>
+  </div>
+  <?= pager($page, $pages, array_filter(['q' => $q])) ?>
+<?php endif; ?>
+</section>
+
+<aside>
+  <form method="post" class="card">
+    <?= csrf_field() ?>
+    <header class="card__h"><div><h2>Patient registered on their own?</h2><p>Add them using the number they received.</p></div></header>
+    <div class="card__b">
+      <?php if ($err): ?><div class="msg err" role="alert"><?= icon('alert') ?><span><?= e($err) ?></span></div><?php endif; ?>
+      <div class="field">
+        <label for="lookup">Patient number or phone</label>
+        <input id="lookup" name="lookup" value="<?= e($lookup) ?>" placeholder="LUF-26-01234" maxlength="30" required>
+      </div>
+    </div>
+    <div class="card__f"><button type="submit" class="btn--ghost">Add to register</button></div>
+  </form>
+</aside>
 </div>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

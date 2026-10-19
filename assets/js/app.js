@@ -176,4 +176,87 @@
     select.addEventListener('change', sync);
     sync();
   });
+
+  // ---------- context-aware form helpers ----------
+
+  // The current value of a named control (radio group or select) in a form.
+  function valueOf(form, name) {
+    var el = form && form.elements[name];
+    if (!el) return '';
+    if (el.length !== undefined && !el.tagName) {
+      for (var i = 0; i < el.length; i++) { if (el[i].checked) return el[i].value; }
+      return '';
+    }
+    return el.value;
+  }
+
+  // data-show-when="name=value" / data-hide-when="name=value": a field that
+  // only matters for one choice appears with that choice. Without JavaScript
+  // every field stays visible and the server still validates.
+  Array.prototype.forEach.call(document.querySelectorAll('[data-show-when],[data-hide-when]'), function (box) {
+    var show = box.hasAttribute('data-show-when');
+    var rule = (box.getAttribute(show ? 'data-show-when' : 'data-hide-when') || '').split('=');
+    var form = box.closest('form');
+    if (!form || rule.length !== 2) return;
+    function sync() {
+      var match = valueOf(form, rule[0]) === rule[1];
+      box.hidden = show ? !match : match;
+    }
+    form.addEventListener('change', sync);
+    sync();
+  });
+
+  // data-filter-by="other": only offer the options whose data-group equals the
+  // value chosen in the other select (e.g. doctors at the chosen centre).
+  Array.prototype.forEach.call(document.querySelectorAll('select[data-filter-by]'), function (select) {
+    var form = select.closest('form');
+    var by = form && form.elements[select.getAttribute('data-filter-by')];
+    if (!by) return;
+    function sync() {
+      Array.prototype.forEach.call(select.options, function (opt) {
+        var group = opt.getAttribute('data-group');
+        var off = group !== null && group !== by.value;
+        opt.hidden = off;
+        opt.disabled = off;
+        if (off && opt.selected) select.value = select.options[0].value;
+      });
+    }
+    by.addEventListener('change', sync);
+    sync();
+  });
+
+  // data-reload-param="name": choosing a value reloads the page with it, so
+  // the server can show context for that choice (the draft is kept).
+  Array.prototype.forEach.call(document.querySelectorAll('select[data-reload-param]'), function (select) {
+    select.addEventListener('change', function () {
+      if (!select.value) return;
+      var p = new URLSearchParams(location.search);
+      p.set(select.getAttribute('data-reload-param'), select.value);
+      location.search = p.toString();
+    });
+  });
+
+  // Demo account buttons on the login page (development only).
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('[data-fill-login]') : null;
+    if (!b) return;
+    var form = document.getElementById('login-form');
+    if (!form) return;
+    form.elements.login_id.value = b.getAttribute('data-fill-login');
+    form.elements.password.value = b.getAttribute('data-fill-pw');
+    form.submit();
+  });
+
+  // Quick-reply chips append a common phrase to a note.
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('[data-append]') : null;
+    if (!b) return;
+    var field = document.getElementById(b.getAttribute('data-append'));
+    if (!field) return;
+    var text = b.getAttribute('data-text');
+    if (field.value.indexOf(text) !== -1) return;
+    field.value = (field.value ? field.value.replace(/\s+$/, '') + ' ' : '') + text;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.focus();
+  });
 })();

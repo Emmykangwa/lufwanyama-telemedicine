@@ -40,7 +40,12 @@ LOGIN CREDENTIALS  (one account per role)
   patient sees the status.
 
   Change these passwords before real use
-  (Staff accounts -> Reset a password).
+  (Staff -> open the person -> Reset password; or My account for your own).
+
+  The login page lists these demo accounts while APP_ENV is development,
+  and only shows the ones whose password above still works. Click one
+  to sign in. If one is missing, restore them with:
+      php tools/demo_accounts.php --reset
 
   To recreate these accounts at any time:
       php tools/demo_accounts.php
@@ -92,7 +97,9 @@ Blank white page
   → Your session timed out. Reload the page and submit again.
 
 Login always fails
-  → Make sure there are no spaces in the phone number.
+  → Spaces, dashes and +260 are fine: 097 000 0001 and +260970000001 both work.
+  → After 8 wrong passwords an account is locked for 15 minutes.
+  → Restore the documented demo passwords: php tools/demo_accounts.php --reset
   → Make sure an account exists. If the database is empty, run:
       php tools/install.php        (creates the administrator)
       php tools/demo_accounts.php  (one account per role)
@@ -108,10 +115,11 @@ PROJECT FOLDER LAYOUT
   patient/     — patient dashboard and self-booking
   health/      — health worker tools (patients, new appointment)
   doctor/      — doctor queue and day schedule
-  admin/       — administrator reports, users, audit log
+  admin/       — overview, staff (register doctors and health workers),
+                 health centres, patients, audit log
   config/      — database connection settings
   includes/    — shared PHP: session, security, helpers, translations
-  assets/      — style.css (~5 KB) and app.js (~6 KB, offline logic)
+  assets/      — style.css (~32 KB) and app.js (~9 KB, offline logic)
   tools/       — automated test suite (selftest.php, offline_test.mjs)
   docs/        — DATABASE.md, DEPLOYMENT.md, TESTING.md
   database.sql — full MySQL schema

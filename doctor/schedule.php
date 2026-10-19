@@ -37,15 +37,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         )->execute([$uid, $aid]);
         audit($pdo, 'COMPLETE', 'appointment', $aid, 'Closed from the schedule');
         $pdo->commit();
-        flash('ok', 'Appointment marked completed.');
+        flash('ok', 'Visit marked completed.');
     }
     redirect('/doctor/schedule.php?' . http_build_query(['from' => $_POST['from'] ?? '', 'to' => $_POST['to'] ?? '']));
 }
 
+$span = clean_get('span', 5);
+if (!in_array($span, ['7', '14', '30'], true)) {
+    $span = '14';
+}
 $from = clean_get('from', 10);
 $to   = clean_get('to', 10);
 $fromSql = valid_date($from) ? $from : today();
-$toSql   = valid_date($to)   ? $to   : date('Y-m-d', strtotime('+14 days'));
+$toSql   = valid_date($to)   ? $to   : date('Y-m-d', strtotime('+' . $span . ' days'));
 if ($toSql < $fromSql) {
     [$fromSql, $toSql] = [$toSql, $fromSql];
 }
@@ -53,7 +57,7 @@ if ($toSql < $fromSql) {
 $st = $pdo->prepare(
     "SELECT a.appointment_id, a.appointment_date, a.department, a.status, a.reason,
             p.full_name, p.patient_number, p.sex, p.dob, p.phone,
-            c.clinical_notes
+            c.clinical_notes, c.consultation_id
        FROM appointments a
        JOIN patients     p ON p.patient_id = a.patient_id
   LEFT JOIN consultations c ON c.appointment_id = a.appointment_id
@@ -70,62 +74,46 @@ foreach ($rows as $r) {
     $byDay[$r['appointment_date']][] = $r;
 }
 
-$page_title = t('my_schedule');
+$page_title   = 'Schedule';
+$page_sub     = count($rows) . ' confirmed ' . (count($rows) === 1 ? 'visit' : 'visits') . ', ' . e(fmt_date($fromSql, false)) . ' – ' . e(fmt_date($toSql));
+$page_actions = '<button type="button" class="btn--ghost" data-print="1">' . icon('printer') . 'Print clinic list</button>';
 require __DIR__ . '/../includes/header.php';
 ?>
-<form method="get" class="card noprint row">
-  <div>
-    <label for="from"><?= e(t('from')) ?></label>
-    <input id="from" name="from" type="date" value="<?= e($fromSql) ?>">
-  </div>
-  <div>
-    <label for="to"><?= e(t('to')) ?></label>
-    <input id="to" name="to" type="date" value="<?= e($toSql) ?>">
-  </div>
-  <div><button type="submit"><?= icon('search') ?><?= e(t('apply')) ?></button></div>
-  <div><button type="button" class="alt" data-print="1"><?= icon('printer') ?><?= e(t('print')) ?></button></div>
-</form>
-
-<p class="hint"><?= count($rows) ?> appointment(s) between <?= e($fromSql) ?> and <?= e($toSql) ?>.
-   Requests still waiting for an answer are on the
-   <a href="<?= e(url('/doctor/dashboard.php')) ?>"><?= e(t('incoming')) ?></a> page.</p>
+<section class="card">
+  <?= tabs(['7' => ['Next 7 days', null], '14' => ['Next 14 days', null], '30' => ['Next 30 days', null]],
+           valid_date($from) || valid_date($to) ? '' : $span, 'span') ?>
+  <form method="get" class="toolbar noprint">
+    <input type="date" name="from" value="<?= e($fromSql) ?>" aria-label="From date">
+    <span class="muted">to</span>
+    <input type="date" name="to" value="<?= e($toSql) ?>" aria-label="To date">
+    <button type="submit" class="btn--ghost">Show</button>
+  </form>
 
 <?php if (!$byDay): ?>
-  <div class="card"><?= e(t('no_records')) ?></div>
+  <?= empty_state('No confirmed visits in this period.', '<a class="btn btn--sm btn--ghost" href="' . e(url('/doctor/dashboard.php')) . '">Open review queue</a>', 'calendar') ?>
 <?php endif; ?>
 
 <?php foreach ($byDay as $day => $list): ?>
-<div class="card">
-  <h2><?= e($day) ?> &middot; <?= count($list) ?> patient(s)</h2>
-  <div class="scroll">
-  <table>
-    <tr><th><?= e(t('patient')) ?></th><th><?= e(t('status')) ?></th><th><?= e(t('department')) ?></th>
-        <th><?= e(t('reason')) ?></th><th class="noprint"></th></tr>
-<?php foreach ($list as $r): ?>
-    <tr>
-      <td><?= e($r['full_name']) ?><br>
-          <small><?= e($r['patient_number']) ?><?= $r['sex'] ? ' &middot; ' . e($r['sex']) : '' ?>
-          <?= $r['phone'] ? ' &middot; ' . e($r['phone']) : '' ?></small></td>
-      <td><?= badge($r['status']) ?></td>
-      <td><?= e($r['department']) ?></td>
-      <td><?= e($r['reason']) ?>
-        <?php if ($r['clinical_notes']): ?>
-          <details><summary><?= e(t('notes')) ?></summary><?= nl2br(e($r['clinical_notes'])) ?></details>
-        <?php endif; ?>
-      </td>
-      <td class="noprint">
-        <form method="post" class="inline" data-confirm="Mark this appointment completed?">
-          <?= csrf_field() ?>
-          <input type="hidden" name="appointment_id" value="<?= (int)$r['appointment_id'] ?>">
-          <input type="hidden" name="from" value="<?= e($fromSql) ?>">
-          <input type="hidden" name="to" value="<?= e($toSql) ?>">
-          <button type="submit" class="alt mini"><?= icon('check') ?><?= e(t('completed')) ?></button>
-        </form>
-      </td>
-    </tr>
+  <div class="daygroup<?= $day === today() ? ' is-today' : '' ?>"><span><?= e(date('l j F', strtotime($day))) ?> · <?= e(rel_day($day)) ?></span><span><?= count($list) ?> patient<?= count($list) === 1 ? '' : 's' ?></span></div>
+  <ul class="agenda">
+<?php foreach ($list as $r): $age = age_from($r['dob']); ?>
+    <li>
+      <?= avatar($r['full_name']) ?>
+      <div class="agenda__b">
+        <b><a class="rowlink" href="<?= e(url('/doctor/case.php?id=' . (int)$r['consultation_id'])) ?>"><?= e($r['full_name']) ?></a>
+          <span class="muted"> · <?= e($r['department']) ?></span></b>
+        <span><?= e($r['reason']) ?><?= $r['sex'] ? ' · ' . e($r['sex']) : '' ?><?= $age !== null ? ', ' . $age . ' y' : '' ?><?= $r['phone'] ? ' · ' . e($r['phone']) : '' ?></span>
+      </div>
+      <form method="post" class="inline noprint" data-confirm="Mark <?= e($r['full_name']) ?> as seen?">
+        <?= csrf_field() ?>
+        <input type="hidden" name="appointment_id" value="<?= (int)$r['appointment_id'] ?>">
+        <input type="hidden" name="from" value="<?= e($fromSql) ?>">
+        <input type="hidden" name="to" value="<?= e($toSql) ?>">
+        <button type="submit" class="btn--ghost btn--sm"><?= icon('check') ?>Seen</button>
+      </form>
+    </li>
 <?php endforeach; ?>
-  </table>
-  </div>
-</div>
+  </ul>
 <?php endforeach; ?>
+</section>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

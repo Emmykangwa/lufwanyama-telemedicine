@@ -27,7 +27,7 @@ $doctors = $pdo->query(
 )->fetchAll();
 
 $err = '';
-$old = ['facility_id' => '', 'doctor_id' => '0', 'department' => '', 'appointment_date' => '', 'reason' => '', 'clinical_notes' => ''];
+$old = ['facility_id' => (string)($profile['facility_id'] ?? ''), 'doctor_id' => '0', 'department' => '', 'appointment_date' => '', 'reason' => '', 'clinical_notes' => ''];
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     csrf_check();
@@ -100,7 +100,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
                 $pdo->commit();
 
-                flash('ok', 'Request sent. Check this page for the reply before you travel.');
+                flash('ok', 'Request sent. The doctor\'s reply will appear here.');
                 redirect('/patient/dashboard.php');
             } catch (PDOException $ex) {
                 if ($pdo->inTransaction()) {
@@ -113,62 +113,81 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$page_title = t('book');
+// How many requests are already open, so the limit is visible before it bites.
+$openNow = 0;
+if ($profile) {
+    $st = $pdo->prepare("SELECT COUNT(*) FROM appointments WHERE patient_id = ? AND status IN ('pending','confirmed','rescheduled')");
+    $st->execute([$profile['patient_id']]);
+    $openNow = (int)$st->fetchColumn();
+}
+
+$page_title = 'Request appointment';
+$crumbs     = [['My appointments', '/patient/dashboard.php']];
 require __DIR__ . '/../includes/header.php';
 ?>
-<div class="card card--form">
-  <h2><?= e(t('book')) ?></h2>
-  <p class="hint">A doctor at the health centre will confirm, suggest another date, or decline with a reason.</p>
-  <?php if ($err): ?><div class="msg err"><?= e($err) ?></div><?php endif; ?>
+<?php if ($openNow >= MAX_OPEN_REQUESTS): ?>
+<div class="msg warn"><?= icon('alert') ?><span>You already have <?= $openNow ?> open requests. Wait for a reply before asking for another.</span></div>
+<?php endif; ?>
+<form method="post" class="card" data-offline="patient-book">
+  <?= csrf_field() ?>
+  <?php if ($err): ?><div class="card__b"><div class="msg err" role="alert"><?= icon('alert') ?><span><?= e($err) ?></span></div></div><?php endif; ?>
 
-  <form method="post" data-offline="patient-book">
-    <?= csrf_field() ?>
-
-    <label for="facility_id"><?= e(t('centre')) ?></label>
-    <select id="facility_id" name="facility_id" required>
-      <option value=""><?= e(t('select')) ?></option>
+  <div class="fsec">
+    <div class="fsec__d"><h3>Where</h3><p>Choose a doctor, or let any doctor on duty reply.</p></div>
+    <div class="fsec__f">
+      <div class="field">
+        <label for="facility_id">Health centre</label>
+        <select id="facility_id" name="facility_id" required>
+          <option value="">Select a health centre</option>
 <?php foreach ($centres as $c): ?>
-      <option value="<?= (int)$c['facility_id'] ?>"<?= (int)$c['facility_id'] === (int)$old['facility_id'] ? ' selected' : '' ?>>
-        <?= e($c['name']) ?>
-      </option>
-<?php endforeach; ?>
-    </select>
-
-    <label for="doctor_id"><?= e(t('doctor')) ?> (optional &mdash; must work at the centre above)</label>
-    <select id="doctor_id" name="doctor_id">
-      <option value="0">-- <?= e(t('any_doctor')) ?> --</option>
-<?php foreach ($doctors as $d): ?>
-      <option value="<?= (int)$d['user_id'] ?>"<?= (int)$d['user_id'] === (int)$old['doctor_id'] ? ' selected' : '' ?>>
-        <?= e($d['full_name']) ?> (<?= e($d['centre']) ?>)
-      </option>
-<?php endforeach; ?>
-    </select>
-
-    <div class="fgrid">
-      <div class="fld">
-        <label for="department"><?= e(t('department')) ?></label>
-        <select id="department" name="department" required>
-          <option value=""><?= e(t('select')) ?></option>
-<?php foreach (departments() as $d): ?>
-          <option value="<?= e($d) ?>"<?= $d === $old['department'] ? ' selected' : '' ?>><?= e($d) ?></option>
+          <option value="<?= (int)$c['facility_id'] ?>"<?= (int)$c['facility_id'] === (int)$old['facility_id'] ? ' selected' : '' ?>><?= e($c['name']) ?></option>
 <?php endforeach; ?>
         </select>
       </div>
-      <div class="fld">
-        <label for="appointment_date"><?= e(t('date')) ?></label>
-        <input id="appointment_date" name="appointment_date" type="date" min="<?= e(today()) ?>"
-               value="<?= e($old['appointment_date']) ?>" required>
+      <div class="field">
+        <label for="doctor_id">Doctor</label>
+        <select id="doctor_id" name="doctor_id" data-filter-by="facility_id">
+          <option value="0">Any doctor</option>
+<?php foreach ($doctors as $d): ?>
+          <option value="<?= (int)$d['user_id'] ?>" data-group="<?= (int)$d['facility_id'] ?>"<?= (int)$d['user_id'] === (int)$old['doctor_id'] ? ' selected' : '' ?>><?= e($d['full_name']) ?></option>
+<?php endforeach; ?>
+        </select>
       </div>
     </div>
+  </div>
 
-    <label for="reason"><?= e(t('reason')) ?></label>
-    <input id="reason" name="reason" maxlength="255" value="<?= e($old['reason']) ?>"
-           placeholder="e.g. Swollen leg for two weeks" required>
+  <div class="fsec">
+    <div class="fsec__d"><h3>When and why</h3><p>The doctor confirms this date or suggests another.</p></div>
+    <div class="fsec__f">
+      <div class="fgrid">
+        <div class="field">
+          <label for="department">Department</label>
+          <select id="department" name="department" required>
+            <option value="">Select</option>
+<?php foreach (departments() as $d): ?>
+            <option value="<?= e($d) ?>"<?= $d === $old['department'] ? ' selected' : '' ?>><?= e($d) ?></option>
+<?php endforeach; ?>
+          </select>
+        </div>
+        <div class="field">
+          <label for="appointment_date">Preferred date</label>
+          <input id="appointment_date" name="appointment_date" type="date" min="<?= e(today()) ?>" value="<?= e($old['appointment_date']) ?>" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="reason">Reason</label>
+        <input id="reason" name="reason" maxlength="255" value="<?= e($old['reason']) ?>" placeholder="e.g. Swollen leg for two weeks" required>
+      </div>
+      <div class="field">
+        <label for="clinical_notes">Symptoms or other details <span class="opt">(optional)</span></label>
+        <textarea id="clinical_notes" name="clinical_notes" rows="4"><?= e($old['clinical_notes']) ?></textarea>
+      </div>
+    </div>
+  </div>
 
-    <label for="clinical_notes">Symptoms or other details for the doctor (optional)</label>
-    <textarea id="clinical_notes" name="clinical_notes"><?= e($old['clinical_notes']) ?></textarea>
-
-    <button type="submit"><?= icon('send') ?><?= e(t('submit')) ?></button>
-  </form>
-</div>
+  <div class="card__f">
+    <a class="btn btn--ghost" href="<?= e(url('/patient/dashboard.php')) ?>">Cancel</a>
+    <button type="submit"<?= $openNow >= MAX_OPEN_REQUESTS ? ' disabled' : '' ?>><?= icon('send') ?>Send request</button>
+  </div>
+</form>
 <?php require __DIR__ . '/../includes/footer.php'; ?>

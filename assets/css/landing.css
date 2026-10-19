@@ -295,3 +295,7 @@
 
 @media (prefers-reduced-motion:no-preference){ html{scroll-behavior:smooth} }
 @media (prefers-reduced-motion:reduce){ .lp *{transition:none!important} }
+
+/* spacing that used to be inline (blocked by the CSP) */
+.lp-wrap > .msg{margin-bottom:22px}
+.appt__aside .b-wide + .b-wide,.appt__aside .b-wide{margin-bottom:8px}

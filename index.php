@@ -122,7 +122,7 @@ $EMERGENCY = '+260 212 000 000';
 <main id="main" class="lp-wrap">
 
 <?php if ($f): ?>
-  <div class="msg <?= $f['type'] === 'ok' ? 'ok' : 'err' ?>" role="status" style="margin-bottom:22px"><?= icon($f['type'] === 'ok' ? 'check' : 'alert') ?><span><?= e($f['msg']) ?></span></div>
+  <div class="msg <?= $f['type'] === 'ok' ? 'ok' : 'err' ?>" role="status"><?= icon($f['type'] === 'ok' ? 'check' : 'alert') ?><span><?= e($f['msg']) ?></span></div>
 <?php endif; ?>
 
   <!-- ===== hero ===== -->
@@ -256,7 +256,7 @@ $EMERGENCY = '+260 212 000 000';
     <aside class="appt__aside">
       <h3>Already registered?</h3>
       <p>Log in to book a new appointment or follow one you have already requested.</p>
-      <a class="b b-light b-wide" href="<?= e(url('/login.php')) ?>" style="margin-bottom:8px"><?= icon('login') ?>Log in to your account</a>
+      <a class="b b-light b-wide" href="<?= e(url('/login.php')) ?>"><?= icon('login') ?>Log in to your account</a>
       <div class="appt__contact">
         <div class="row"><?= icon('phone') ?><div><small>Call us any time</small><b><?= e($EMERGENCY) ?></b></div></div>
         <div class="row"><?= icon('mail') ?><div><small>Email</small><b>info@lufwanyama.health</b></div></div>
